@@ -1,6 +1,6 @@
 <!DOCTYPE RCC><RCC version="1.0">
 <qresource>
       <file>rom/spectrum.rom</file>
-      <file>rom/sna_loader.rom</file>
+      <file>rom/snaloader.rom</file>
 </qresource>
 </RCC>

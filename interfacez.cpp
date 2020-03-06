@@ -381,7 +381,7 @@ void InterfaceZ::upload_sna_rom()
     // Load ROM
 
     if (m_sna_rom_size<0) {
-        QFile file(":/rom/sna_loader.rom");
+        QFile file(":/rom/snaloader.rom");
 
         if(file.open(QIODevice::ReadOnly)){
             QByteArray data=file.readAll();
