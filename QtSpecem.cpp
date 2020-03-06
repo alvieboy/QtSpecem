@@ -9,7 +9,7 @@
 
 #include <QMessageBox>
 
-extern "C" void execute();
+extern "C" void execute_if_running();
 
 extern "C" unsigned char keybd_buff[8];
 extern "C" unsigned char joystick;
@@ -64,8 +64,8 @@ void DrawnWindow::paintEvent(QPaintEvent *) {
 	QPainter paint(this);
 	// paint.drawImage(0, 0, background.scaled(height(),width(),Qt::KeepAspectRatio));
     
-	    paint.drawImage(0, 0, background.scaled(size()));
-        execute(); 
+        paint.drawImage(0, 0, background.scaled(size()));
+        execute_if_running();
 }
 
 int lParam;

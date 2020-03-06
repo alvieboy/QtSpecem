@@ -85,13 +85,15 @@ extern USHORT parity_table[256];
 
 /*  memory adressing - readbyte()
  */
-#define readbyte(adress) (*(mem+(USHORT)(adress)))
+UCHAR readROM(USHORT addr);
+UCHAR readRAM(USHORT addr);
+//#define readbyte(adress) (*(mem+(USHORT)(adress)))
 
 /* read word pointed to PC and sum 2 to PC
  */
 #define Getnextword() (PC += 2, readword((USHORT)(PC - 2)) )
 
-
+extern void retn_called_hook(void);
 /* read byte pointed to PC and increment it
  */
 #define Getnextbyte() readbyte(PC++)

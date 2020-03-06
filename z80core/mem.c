@@ -42,8 +42,10 @@ void writeword(USHORT addr, USHORT value)
  *=========================================================================*/
 UCHAR readbyte(USHORT addr)
 {
-	/* definide as a macro at z80.h */
-	return((UCHAR) *(mem+addr) );
+    /* definide as a macro at z80.h */
+    if (addr < 0x4000)
+        return readROM(addr);
+    return readRAM(addr);
 }
 
 #undef readword
@@ -53,9 +55,9 @@ UCHAR readbyte(USHORT addr)
  *=========================================================================*/
 USHORT readword(USHORT addr)
 {
-	/* Remember: Z80 word is in reversed order */
-	return( ((USHORT) *(mem+addr) ) |
-			  ( ( (USHORT) *(mem+(USHORT)(addr + 1)) ) << 8 ) );
+    /* Remember: Z80 word is in reversed order */
+    return( ((USHORT) readbyte(addr) ) |
+           ( ( (USHORT) readbyte(addr+1) ) << 8 ) );
 }
 
 

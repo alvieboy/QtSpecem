@@ -1,17 +1,9 @@
-TEMPLATE = app
 TARGET = QtSpecem
 INCLUDEPATH += .
-QT += widgets
+QT += widgets network
 RESOURCES += QtSpecem.qrc
 ICON = icon.icns
 CONFIG += app_bundle
-
-# You can make your code fail to compile if you use deprecated APIs.
-# In order to do so, uncomment the following line.
-# Please consult the documentation of the deprecated API in order to know
-# how to port your code away from it.
-# You can also select to disable deprecated APIs only up to a certain version of Qt.
-#DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 # Input
 HEADERS += QtSpecem.h \
@@ -20,7 +12,10 @@ HEADERS += QtSpecem.h \
            z80core/env.h \
            z80core/iglobal.h \
            z80core/ivars.h \
-           z80core/z80.h
+           z80core/z80.h \
+           expansion/expansion.h \
+           interfacez.h
+
 SOURCES += main.cpp \
            QtSpecem.cpp \
            emul/error.c \
@@ -49,5 +44,9 @@ SOURCES += main.cpp \
            z80core/misc.c \
            z80core/rotate.c \
            z80core/shutdown.c \
-           z80core/stack.c
+           z80core/stack.c \
+           expansion/expansion.c \
+           interfacez.cpp \
+           sna_relocs.cpp 
+
 RESOURCES += QtSpecem.qrc

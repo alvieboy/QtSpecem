@@ -64,8 +64,10 @@ void execute()
         if (!TraceOn)
         {
 	   inc_R();
-	   /* Call funtion indexed by opcode */
-	   (*instruc_tabl[Getnextbyte()])();
+	    /* Call funtion indexed by opcode */
+            void (*insnfun)(void) = instruc_tabl[Getnextbyte()];
+            (insnfun)();
+
          // if ( PC == 0x0562 )
          //if ( PC == 0x05c8 )
          //{

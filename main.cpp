@@ -5,6 +5,7 @@
  */
 
 #include "QtSpecem.h"
+#include "interfacez.h"
 
 extern "C" void init_emul();
 extern "C" void init_pallete();
@@ -12,6 +13,7 @@ extern "C" void open_sna(const char *);
 extern "C" void writebyte(unsigned short, unsigned char);
 extern "C" void patch_rom(int);
 extern unsigned char * mem;
+static InterfaceZ *iz;
 
 int main(int argc, char **argv) {
 	QApplication app(argc, argv);
@@ -36,6 +38,12 @@ int main(int argc, char **argv) {
       p=data;
       for (i=0; i < 16384 ; i++)
          *(mem+i) = *(p++);
+   }
+
+   iz = new InterfaceZ();
+   if (iz->init()<0) {
+       fprintf(stderr,"Cannot init InterfaceZ\n");
+       return -1;
    }
 
    if ( argc > 1 )
