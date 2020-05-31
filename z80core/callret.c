@@ -100,12 +100,12 @@ void reti()
  *=========================================================================*/
 void retn()
 {
-   retn_called_hook();
    T(14);
 
    /* Restore interrupt state */
    IFF1 = IFF2;
    ret();
+   retn_called_hook();
 }
 
 #undef ret

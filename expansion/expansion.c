@@ -19,7 +19,7 @@ int readport_expansion(UCHAR port, UCHAR *value)
 {
     unsigned i;
     int r = -1;
-    printf("Check IO %d\n", port);
+//    printf("Check IO %d\n", port);
     for (i=0;i<num_expanders;i++) {
         if ( (port & expanders[i].mask) ==
             expanders[i].port ) {
@@ -37,8 +37,10 @@ int writeport_expansion(UCHAR port, UCHAR value)
     int r = -1;
 
     for (i=0;i<num_expanders;i++) {
+        //printf("Check %02x mask %02x port %02x\n", port, expanders[i].mask, expanders[i].port);
         if ( (port & expanders[i].mask) ==
             expanders[i].port ) {
+          //  printf("Match\n");
             expanders[i].writefn(expanders[i].userdata,port, value);
             r = 0;
             break;
@@ -65,9 +67,9 @@ int register_expansion_port(UCHAR port, UCHAR mask,
 
 
 extern UCHAR *mem;
-static UCHAR *current_rom = NULL;
+static const UCHAR *current_rom = NULL;
 
-void set_current_rom(UCHAR *address)
+void set_current_rom(const UCHAR *address)
 {
     current_rom = address;
 }
@@ -82,8 +84,10 @@ UCHAR readROM(USHORT addr)
     UCHAR val;
     if (!current_rom)
         val =  mem[addr];
-    else
+    else {
+        //printf("ROM %04x %02x\n", addr, current_rom[addr]);
         val = current_rom[addr];
+    }
     rom_access_hook(addr,val);
     return val;
 }

@@ -16,7 +16,7 @@ int register_expansion_port(UCHAR port, UCHAR mask,
 int readport_expansion(UCHAR port, UCHAR *value);
 int writeport_expansion(UCHAR port, UCHAR value);
 
-void set_current_rom(UCHAR *address);
+void set_current_rom(const UCHAR *address);
 
 UCHAR readROM(USHORT addr);
 UCHAR readRAM(USHORT addr);

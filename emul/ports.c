@@ -54,6 +54,7 @@ void writeport(USHORT port, UCHAR value)
          out_ula &= 0xBF;
          */
     } else {
+//        printf("EXP wr %04x\n", port);
         writeport_expansion(port, value);
     }
 }

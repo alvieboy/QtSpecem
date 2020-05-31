@@ -8,11 +8,72 @@
 #include <QByteArray>
 #include "sna_relocs.h"
 
+#define LOGONAME logo2
+#include "logo2.xbm"
+
+
+#define STATUS_BIT_WIFI_MODE_STA 0
+#define STATUS_BIT_WIFI_CONNECTED 1
+#define STATUS_BIT_WIFI_SCANNING 2
+#define STATUS_BIT_SDCONNECTED 3
+
+static const uint8_t bitRevTable[256] =
+{
+    0x00, 0x80, 0x40, 0xc0, 0x20, 0xa0, 0x60, 0xe0,
+    0x10, 0x90, 0x50, 0xd0, 0x30, 0xb0, 0x70, 0xf0,
+    0x08, 0x88, 0x48, 0xc8, 0x28, 0xa8, 0x68, 0xe8,
+    0x18, 0x98, 0x58, 0xd8, 0x38, 0xb8, 0x78, 0xf8,
+    0x04, 0x84, 0x44, 0xc4, 0x24, 0xa4, 0x64, 0xe4,
+    0x14, 0x94, 0x54, 0xd4, 0x34, 0xb4, 0x74, 0xf4,
+    0x0c, 0x8c, 0x4c, 0xcc, 0x2c, 0xac, 0x6c, 0xec,
+    0x1c, 0x9c, 0x5c, 0xdc, 0x3c, 0xbc, 0x7c, 0xfc,
+    0x02, 0x82, 0x42, 0xc2, 0x22, 0xa2, 0x62, 0xe2,
+    0x12, 0x92, 0x52, 0xd2, 0x32, 0xb2, 0x72, 0xf2,
+    0x0a, 0x8a, 0x4a, 0xca, 0x2a, 0xaa, 0x6a, 0xea,
+    0x1a, 0x9a, 0x5a, 0xda, 0x3a, 0xba, 0x7a, 0xfa,
+    0x06, 0x86, 0x46, 0xc6, 0x26, 0xa6, 0x66, 0xe6,
+    0x16, 0x96, 0x56, 0xd6, 0x36, 0xb6, 0x76, 0xf6,
+    0x0e, 0x8e, 0x4e, 0xce, 0x2e, 0xae, 0x6e, 0xee,
+    0x1e, 0x9e, 0x5e, 0xde, 0x3e, 0xbe, 0x7e, 0xfe,
+    0x01, 0x81, 0x41, 0xc1, 0x21, 0xa1, 0x61, 0xe1,
+    0x11, 0x91, 0x51, 0xd1, 0x31, 0xb1, 0x71, 0xf1,
+    0x09, 0x89, 0x49, 0xc9, 0x29, 0xa9, 0x69, 0xe9,
+    0x19, 0x99, 0x59, 0xd9, 0x39, 0xb9, 0x79, 0xf9,
+    0x05, 0x85, 0x45, 0xc5, 0x25, 0xa5, 0x65, 0xe5,
+    0x15, 0x95, 0x55, 0xd5, 0x35, 0xb5, 0x75, 0xf5,
+    0x0d, 0x8d, 0x4d, 0xcd, 0x2d, 0xad, 0x6d, 0xed,
+    0x1d, 0x9d, 0x5d, 0xdd, 0x3d, 0xbd, 0x7d, 0xfd,
+    0x03, 0x83, 0x43, 0xc3, 0x23, 0xa3, 0x63, 0xe3,
+    0x13, 0x93, 0x53, 0xd3, 0x33, 0xb3, 0x73, 0xf3,
+    0x0b, 0x8b, 0x4b, 0xcb, 0x2b, 0xab, 0x6b, 0xeb,
+    0x1b, 0x9b, 0x5b, 0xdb, 0x3b, 0xbb, 0x7b, 0xfb,
+    0x07, 0x87, 0x47, 0xc7, 0x27, 0xa7, 0x67, 0xe7,
+    0x17, 0x97, 0x57, 0xd7, 0x37, 0xb7, 0x77, 0xf7,
+    0x0f, 0x8f, 0x4f, 0xcf, 0x2f, 0xaf, 0x6f, 0xef,
+    0x1f, 0x9f, 0x5f, 0xdf, 0x3f, 0xbf, 0x7f, 0xff,
+};
+
+
+
 extern "C" {
 #include "z80core/iglobal.h"
-
+#include "z80core/z80.h"
+    static volatile int nmi_pending = 0;
+    static volatile const uint8_t *nmi_rom = NULL;
+    void save_sna(const char * file_name);
+    extern void open_sna(const char*);
+    extern uint16_t read_DE();
     void execute_if_running()
     {
+        if (nmi_pending) {
+            nmi_pending=0;
+            //open_sna("input.sna");
+            do_nmi_int();
+            if (nmi_rom) {
+                // test
+                set_current_rom((const unsigned char*)nmi_rom);
+            }
+        }
         execute();
     }
 
@@ -21,6 +82,13 @@ extern "C" {
         // Upon retn, restore ROM.
         printf("RETN called, restoring stock ROM\n");
         set_current_rom(NULL);
+
+       // save_sna("snadump.sna");
+    }
+    void trigger_nmi(const uint8_t *rom)
+    {
+        nmi_rom = rom;
+        nmi_pending = 1;
     }
 }
 
@@ -49,6 +117,20 @@ void interfacez__iowrite(void*user,UCHAR address, UCHAR value)
     static_cast<InterfaceZ*>(user)->iowrite(address, value);
 }
 
+InterfaceZ::InterfaceZ():
+m_version("v1.0 2020/03/30 FPGA A5.03 r3"),
+m_apname("[MyHouseWiFi]"),
+m_versionresource(m_version),
+m_invalidresource(RESOURCE_TYPE_INVALID),
+m_wificonfigresource(m_apname),
+m_wifilistresource(m_aplist),
+m_videomoderesource(&m_videomode)
+{
+    m_videomode = 2;
+    customromloaded = false;
+
+}
+
 int InterfaceZ::init()
 {
     int r  = register_expansion_port(0x01,
@@ -65,6 +147,16 @@ int InterfaceZ::init()
     m_handlers["uploadsna"] = &InterfaceZ::cmd_upload_sna;
     m_handlers["resettocustom"] = &InterfaceZ::cmd_resettocustom;
 
+
+    registerResource( 0x00, &m_versionresource);
+    registerBitmapImageResource(0x01, logo2_bits, logo2_width>>3, logo2_height);
+    registerResource( 0x02, &m_statusresource);
+    registerResource( 0x03, &m_directoryresource);
+    registerResource( 0x04, &m_wificonfigresource);
+    registerResource( 0x05, &m_wifilistresource);
+    registerResource( 0x06, &m_videomoderesource);
+    registerResource( 0x10, &m_opstatusresource);
+
     cmdt = new command_t; // THIS MUST BE by socket
 
     m_cmdsocket = new QTcpServer();
@@ -80,6 +172,11 @@ int InterfaceZ::init()
 
     m_sna_rom_size = -1;
 
+    // Test
+    m_statusresource.set(0x03); // Connected, STA mode
+
+    connect(&m_scantimer, &QTimer::timeout, this, &InterfaceZ::WiFiScanFinished);
+    connect(&m_connecttimer, &QTimer::timeout, this, &InterfaceZ::WiFiConnected);
     return 0;
 }
 
@@ -113,21 +210,37 @@ UCHAR InterfaceZ::ioread(UCHAR address)
     case 0x05:
         val = 0x39; //Bg
         break;
-    case 0x0B:
-        //qDebug()<<"Head "<<(void*)m_sna_head<<"tail"<<(void*)m_sna_tail<<"size"<<m_sna_size <<"Diff"<<(m_sna_tail-m_sna);
-        if ( m_sna_head == m_sna_tail ) {
+    case 0x07: // Cmd fifo status
+        if (m_cmdfifo.size()>=32) {
             val = 0x01;
-          break;
+        } else {
+            val = 0x00;
         }
-        val = 0x00;
+        break;
+    case 0x0B:
+        if (m_resourcefifo.empty()) {
+            val = 0x01;
+        } else {
+            val = 0x00;
+        }
         break;
 
     case 0x0D:
-        if ( m_sna_head == m_sna_tail ) {
+        if (m_resourcefifo.empty()) {
             val = 0x00;
-            break;
+        } else {
+            val = m_resourcefifo.front();
+            m_resourcefifo.pop_front();
         }
-        val = *m_sna_head++;
+
+        break;
+    case 0x17:
+        printf("return RAM[0x%06x] = 0x%02x\n", extramptr, extram[extramptr]);
+        val = extram[extramptr++];
+        break;
+
+    case 0x1F: // Joy port
+        val = 0xff;
         break;
     }
 
@@ -135,9 +248,192 @@ UCHAR InterfaceZ::ioread(UCHAR address)
     return val;
 }
 
+
+
+
+void InterfaceZ::pushResource(const Resource &r)
+{
+    unsigned len = r.len();
+    m_resourcefifo.push_back(r.type());
+    if (r.type()!=RESOURCE_TYPE_INVALID) {
+        m_resourcefifo.push_back(len & 0xff);
+        m_resourcefifo.push_back((len>>8) & 0xff);
+
+        r.copyTo(m_resourcefifo);
+    }
+}
+
+void InterfaceZ::eval_command()
+{
+    uint8_t filelen;
+    //uint8_t status;
+    int psize;
+    // Simple for now
+    uint8_t v = m_cmdfifo.front();
+    switch (v) {
+    case 0x00: /* Load resource */
+        if (m_cmdfifo.size()<2)
+            break; // Need more data
+        m_cmdfifo.pop_front();
+        v = m_cmdfifo.front(); // Get resource ID
+        m_cmdfifo.pop_front();
+
+        if (m_resources.find(v) == m_resources.end()) {
+            pushResource(m_invalidresource);
+        } else {
+            pushResource(*m_resources[v]);
+        }
+        break;
+    case 0x01:
+        /* Set AP */
+        {
+            if (m_cmdfifo.size()<3)
+                return;
+            // 0: command
+            // 1: WiFI mode (0: STA mode, 1: AP mode)
+            // 2: SSID len
+            // 3: ssid0
+            // 4: ssid1
+            // 5: pwlen
+            // 6: pw1
+            // 7: pw2
+            uint8_t ssidlen = m_cmdfifo[2];
+            int psize = 3+ssidlen;
+            if (m_cmdfifo.size() < (psize+1)) // 3 bytes, SSID chars, PWD size.
+                return;
+            uint8_t pwdlen = m_cmdfifo[psize];
+
+            if (m_cmdfifo.size() < psize+1+pwdlen) {
+                return;
+            }
+            // Fetch data.
+            int idx = 1;
+            QString ssid, password;
+            //uint8_t mode = m_cmdfifo[idx++];
+            idx++; // past ssidlen
+
+            while (ssidlen--) {
+                ssid+=m_cmdfifo[idx++];
+            }
+            idx++; // past pwdlen
+            while (pwdlen--) {
+                password+=m_cmdfifo[idx++];
+            }
+
+            qDebug()<<"Connect to SSID"<<ssid<<"with password"<<password;
+
+            m_cmdfifo.clear();
+            m_statusresource.clearbit(STATUS_BIT_WIFI_CONNECTED);
+            m_statusresource.setbit(STATUS_BIT_WIFI_MODE_STA);
+            m_apname = ssid;
+            m_connecttimer.start(2000);
+        }
+
+
+        break;
+    case 0x02:
+        /* Start scanning process */
+        m_cmdfifo.pop_front();
+        startWiFiScan();
+        break;
+
+    case 0x05:
+        /* Save SNA */
+        if (m_cmdfifo.size()<2)
+            break; // Need more data
+
+        filelen = m_cmdfifo[1];
+        psize = 2+filelen;
+
+        if (m_cmdfifo.size() < psize)
+            break;
+        printf("Saving snapshot file len %d\n", filelen);
+        //
+        //m_opstatusresource.setStatus(0xFE, ""); // Set operation in progress
+        saveSNA();
+        m_cmdfifo.clear();
+        break;
+
+    case 0x08:
+        /* Play tape */
+        if (m_cmdfifo.size()<2)
+            break; // Need more data
+
+        filelen = m_cmdfifo[1];
+        psize = 2+filelen;
+
+        if (m_cmdfifo.size() < psize)
+            break;
+        printf("Play tape\n");
+        m_cmdfifo.clear();
+        break;
+
+    case 0x07:// File filter
+        if (m_cmdfifo.size()<2)
+            break; // Need more data
+        printf("File filter set to %d\n", m_cmdfifo[1]);
+        m_cmdfifo.clear();
+        break;
+
+    case 0x0C:// Video mode */
+        if (m_cmdfifo.size()<2)
+            break; // Need more data
+        qDebug()<<"VIDEO MODE SET "<<m_cmdfifo[1];
+        m_videomode = m_cmdfifo[1];
+        m_cmdfifo.clear();
+        break;
+    default:
+        //pushResource(m_invalidresource);
+        m_opstatusresource.setStatus(0xff,"Unknown command");
+        printf("Received INVALID command %02x\n",v);
+        break;
+    }
+}
+
 void InterfaceZ::iowrite(UCHAR address, UCHAR value)
 {
-    qDebug()<<"InterfaceZ IOWRITE "<<(int)address<<"value"<<(int)value;
+    //printf("IOW %d\n", address);
+//    qDebug()<<"InterfaceZ IOWRITE "<<(int)address<<"value"<<(int)value;
+
+    switch (address) {
+    case 0x09: // Cmd fifo
+        if (m_cmdfifo.size()<32) {
+            m_cmdfifo.push_back(value);
+            eval_command();
+        }
+        break;
+    case 0x11:
+        // Address LSB
+        extramptr &= 0xFFFF00;
+        extramptr |= value;
+        break;
+
+    case 0x13:
+        // Address hSB
+        extramptr &= 0xFF00FF;
+        extramptr |= ((uint32_t)value)<<8;
+        printf("EXT ram pointer: %06x\n", extramptr);
+        break;
+
+    case 0x15:
+        // Address MSB
+        extramptr &= 0x00FFFF;
+        // We only use 1 banks.
+        value &= 0x1;
+
+        extramptr |= ((uint32_t)value)<<16;
+        printf("EXT ram pointer: %06x\n", extramptr);
+        break;
+
+    case 0x17:
+        printf("RAM[0x%06x] = 0x%02x\n", extramptr, value);
+        extram[extramptr++] = value;
+        if (extramptr>=sizeof(extram)) {
+            extramptr=0;
+        }
+        break;
+
+    }
 }
 
 void InterfaceZ::readyRead(QTcpSocket *s)
@@ -393,7 +689,7 @@ void InterfaceZ::upload_sna_rom()
             return;
         }
     }
-    apply_relocs(m_sna, &m_sna_rom[0]);
+    sna_apply_relocs(m_sna, &m_sna_rom[0]);
     qDebug()<<"Applying custom SNA rom";
     set_current_rom(&m_sna_rom[0]);
 
@@ -423,9 +719,6 @@ int InterfaceZ::upload_sna_data(command_t *cmdt)
 
     remain = cmdt->romsize - cmdt->romoffset;
 
-    if (remain==0)
-        return 0;
-
     {
         printf("Dump: [");
         for (int i=0;i<16;i++) {
@@ -439,7 +732,12 @@ int InterfaceZ::upload_sna_data(command_t *cmdt)
             upload_sna_rom();
         }
         m_sna_tail = &m_sna[cmdt->romoffset];
+        printf("Current used space: %ld\n", m_sna_tail - m_sna_head);
     }
+
+    if (remain==0)
+        return 0;
+
 
     return 1;
 }
@@ -880,3 +1178,267 @@ static int check_command(command_t *cmdt, uint8_t *nl)
 
 
 #endif
+
+void InterfaceZ::registerBitmapImageResource(uint8_t id, const uint8_t *data, uint8_t width_bytes, uint8_t height_bits)
+{
+    QByteArray bytes;
+    bytes.reserve( (width_bytes * height_bits)
+                  + 2 // Width+Height
+                 );
+
+    bytes.append((char)width_bytes);
+    bytes.append((char)height_bits);
+
+    int i;
+
+    for (i=0;i<width_bytes*height_bits;i++) {
+        bytes.append( (char)bitRevTable[*data++] );
+
+    }
+    bytes.append((const char*)data, width_bytes*height_bits);
+
+    m_resources[id] = new BinaryResource(RESOURCE_TYPE_BITMAP, bytes);
+}
+
+void InterfaceZ::registerResource(uint8_t id, Resource *r)
+{
+    m_resources[id] = r;
+}
+
+
+void InterfaceZ::onSDConnected()
+{
+    m_statusresource.setbit(STATUS_BIT_SDCONNECTED);
+}
+
+void InterfaceZ::onSDDisconnected()
+{
+    m_statusresource.clearbit(STATUS_BIT_SDCONNECTED);
+}
+
+void InterfaceZ::startWiFiScan()
+{
+    m_statusresource.setbit(STATUS_BIT_WIFI_SCANNING);
+    m_scantimer.start(2000);
+    m_aplist.clear();
+}
+
+DirectoryResource::DirectoryResource()
+{
+    m_cwd="/";
+    m_files.push_back( fileentry(FLAG_DIRECTORY, "Games" ));
+    m_files.push_back( fileentry(FLAG_FILE, "FILENONE.TAP" ));
+    for (int i=0;i<4;i++) {
+        char f[16];
+        sprintf(f,"FILE%d.TAP", i);
+        m_files.push_back( fileentry(FLAG_FILE, f));
+    }
+}
+
+uint8_t DirectoryResource::type() const
+{
+    return RESOURCE_TYPE_DIRECTORYLIST;
+}
+
+
+uint16_t DirectoryResource::len() const
+{
+    unsigned len = 1; // Number of entries (one byte)
+    len+= 1 + m_cwd.length();
+    for (auto i: m_files) {
+        len += 1; // Flags
+        len += 1; // File name len
+        len += i.name.length();
+    }
+    return len;
+}
+
+void DirectoryResource::copyTo(QQueue<uint8_t> &queue) const
+{
+    queue.push_back(m_files.size());
+    for (auto c: m_cwd) {
+        queue.push_back(c.toLatin1());
+    }
+    queue.push_back(0x00);
+
+    for (auto i: m_files) {
+        queue.push_back(i.flags);
+        //queue.push_back(i.name.length());
+        for (auto c: i.name) {
+            queue.push_back(c.toLatin1());
+        }
+        queue.push_back(0x00);
+    }
+};
+
+uint16_t WiFiListResource::len() const
+{
+    unsigned len = 1; // Number of entries (one byte)
+    for (auto i: m_accesspoints) {
+        len += 1; // Flags
+        len += 1; // AP name len
+        len += i.ssid.length();
+    }
+    return len;
+}
+
+void WiFiListResource::copyTo(QQueue<uint8_t> &queue) const
+{
+    queue.push_back(m_accesspoints.size());
+    for (auto i: m_accesspoints) {
+        queue.push_back(i.flags);
+        //queue.push_back(i.name.length());
+        for (auto c: i.ssid) {
+            queue.push_back(c.toLatin1());
+        }
+        queue.push_back(0x00);
+    }
+
+};
+
+
+void InterfaceZ::WiFiScanFinished()
+{
+    m_aplist.clear();
+    m_aplist.push_back( AccessPoint(0x01, "Wifi1") );
+    m_aplist.push_back( AccessPoint(0x01, "Wifi2") );
+    m_aplist.push_back( AccessPoint(0x00, "OpenWifi3") );
+    m_aplist.push_back( AccessPoint(0x01, "Wifi4TestLongName") );
+    m_statusresource.clearbit(STATUS_BIT_WIFI_SCANNING);
+}
+
+void InterfaceZ::WiFiConnected()
+{
+    m_statusresource.setbit(STATUS_BIT_WIFI_CONNECTED);
+}
+
+void InterfaceZ::onNMI()
+{
+    printf(" ***** NMI ***** (custom: %s)\n", customromloaded?"yes":"no");
+    trigger_nmi(customromloaded ? customrom : NULL);
+}
+
+void InterfaceZ::loadCustomROM(const char *name)
+{
+    QFile file(name);
+    QByteArray data;
+    const char * p;
+    printf("Loading custom ROM from %s\n", name);
+    if(file.open(QIODevice::ReadOnly)){
+        data=file.readAll();
+        file.close();
+        p=data;
+        for (int i=0; i < 16384 ; i++)
+            *(customrom+i) = *(p++);
+    } else {
+        printf("Erorr loading custom ROM from %s\n", name);
+
+        return;
+    }
+
+    customromloaded = true;
+}
+
+#include "sna_defs.h"
+
+void InterfaceZ::saveSNA()
+{
+    SnaFile sna("teste.sna");
+
+    if (sna.open()<0) {
+        m_opstatusresource.setStatus(0xFF, "Invalid filename"); // Set operation in progress
+        return;
+    }
+    // Dump
+    printf("***************** SNA info *******************\n");
+    printf(" A  : %02x  F : %02x\n", extram[SNA_RAM_OFF_A], extram[SNA_RAM_OFF_F]);
+    printf(" BC : %02x%02x\n", extram[SNA_RAM_OFF_B], extram[SNA_RAM_OFF_C]);
+    printf(" DE : %02x%02x\n", extram[SNA_RAM_OFF_D], extram[SNA_RAM_OFF_E]);
+    printf(" HL : %02x%02x\n", extram[SNA_RAM_OFF_H], extram[SNA_RAM_OFF_L]);
+
+    printf(" SP : %02x%02x\n", extram[SNA_RAM_OFF_SPH], extram[SNA_RAM_OFF_SPL]);
+    printf(" IX : %02x%02x\n", extram[SNA_RAM_OFF_IXH], extram[SNA_RAM_OFF_IXL]);
+    printf(" IY : %02x%02x\n", extram[SNA_RAM_OFF_IYH], extram[SNA_RAM_OFF_IYL]);
+
+    printf(" A' : %02x  F': %02x\n", extram[SNA_RAM_OFF_Aalt], extram[SNA_RAM_OFF_Falt]);
+    printf(" BC': %02x%02x\n", extram[SNA_RAM_OFF_Balt], extram[SNA_RAM_OFF_Calt]);
+    printf(" DE': %02x%02x\n", extram[SNA_RAM_OFF_Dalt], extram[SNA_RAM_OFF_Ealt]);
+    printf(" HL': %02x%02x\n", extram[SNA_RAM_OFF_Halt], extram[SNA_RAM_OFF_Lalt]);
+
+    printf(" R : %02x\n", extram[SNA_RAM_OFF_R]);
+    printf(" IFF2: 0x%02x (%s)\n", extram[SNA_RAM_OFF_IFF2], extram[SNA_RAM_OFF_IFF2] & 4 ? "ENABLED" : "Disabled");
+
+
+    //   0        1      byte   I                                      Check
+    sna.write(extram[SNA_RAM_OFF_I]);
+    //   1        8      word   HL',DE',BC',AF'                        Check
+    sna.write(extram[SNA_RAM_OFF_Lalt]);
+    sna.write(extram[SNA_RAM_OFF_Halt]);
+    sna.write(extram[SNA_RAM_OFF_Ealt]);
+    sna.write(extram[SNA_RAM_OFF_Dalt]);
+    sna.write(extram[SNA_RAM_OFF_Calt]);
+    sna.write(extram[SNA_RAM_OFF_Balt]);
+    sna.write(extram[SNA_RAM_OFF_Falt]);
+    sna.write(extram[SNA_RAM_OFF_Aalt]);
+    //   9        10     word   HL,DE,BC,IY,IX                         Check
+    sna.write(extram[SNA_RAM_OFF_L]);
+    sna.write(extram[SNA_RAM_OFF_H]);
+    sna.write(extram[SNA_RAM_OFF_E]);
+    sna.write(extram[SNA_RAM_OFF_D]);
+    sna.write(extram[SNA_RAM_OFF_C]);
+    sna.write(extram[SNA_RAM_OFF_B]);
+    sna.write(extram[SNA_RAM_OFF_IYL]);
+    sna.write(extram[SNA_RAM_OFF_IYH]);
+    sna.write(extram[SNA_RAM_OFF_IXL]);
+    sna.write(extram[SNA_RAM_OFF_IXH]);
+    //   19       1      byte   Interrupt (bit 2 contains IFF2, 1=EI/0=DI)  Check
+    sna.write(extram[SNA_RAM_OFF_IFF2]);
+    //   20       1      byte   R                                      Check
+    sna.write(extram[SNA_RAM_OFF_R]);
+    //   21       4      words  AF,SP                                  Check
+    sna.write(extram[SNA_RAM_OFF_F]);
+    sna.write(extram[SNA_RAM_OFF_A]);
+    sna.write(extram[SNA_RAM_OFF_SPL]);
+    sna.write(extram[SNA_RAM_OFF_SPH]);
+    //   25       1      byte   IntMode (0=IM0/1=IM1/2=IM2)            Check
+    sna.write(extram[SNA_RAM_OFF_IMM]);
+    //   26       1      byte   BorderColor (0..7, not used by Spectrum 1.7)  Check
+    sna.write(extram[SNA_RAM_OFF_BORDER]);
+    //   27       49152  bytes  RAM dump 16384..65535
+    sna.write(&extram[SNA_RAM_OFF_CHUNK1], SNA_RAM_CHUNK1_SIZE);
+
+    sna.write(&extram[SNA_RAM_OFF_CHUNK2], SNA_RAM_CHUNK2_SIZE);
+    sna.close();
+    m_opstatusresource.setStatus(0xFF, "Saved"); // Set operation in progress
+}
+
+int SnaFile::open()
+{
+    if (!m_file.open(QIODevice::WriteOnly|QIODevice::Truncate)){
+        return -1;
+    }
+    return 0;
+}
+void SnaFile::write(const uint8_t val)
+{
+    m_file.write((const char*)&val,1);
+}
+void SnaFile::write(const uint8_t *buf, size_t len)
+{
+    m_file.write((const char*)buf, len);
+}
+void SnaFile::close()
+{
+    m_file.close();
+}
+
+
+
+/*
+ 00000000  3f 58 27 9b 36 21 14 80  00 a8 3f 80 58 01 00 8b  |?X'.6!....?.X...|
+ 00000010  85 de 9d fe 78 94 58 fa  9c 01 bf 05 00 00 00 00  |....x.X.........|
+                    ~~ ~~                 ~~
+
+                    19 20                 26
+
+                    */

@@ -183,3 +183,7 @@ static void execute_ED()
 }
 
 /* EOF: Kernel.c */
+
+unsigned short read_DE() {
+    return DE;
+}

@@ -14,7 +14,7 @@ HEADERS += QtSpecem.h \
            z80core/ivars.h \
            z80core/z80.h \
            expansion/expansion.h \
-           interfacez.h
+           interfacez/interfacez.h
 
 SOURCES += main.cpp \
            QtSpecem.cpp \
@@ -46,7 +46,7 @@ SOURCES += main.cpp \
            z80core/shutdown.c \
            z80core/stack.c \
            expansion/expansion.c \
-           interfacez.cpp \
-           sna_relocs.cpp 
+           interfacez/interfacez.cpp \
+           interfacez/sna_relocs.c 
 
 RESOURCES += QtSpecem.qrc

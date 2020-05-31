@@ -12,9 +12,9 @@
 class DrawnWindow: public QMainWindow {
 Q_OBJECT
 public:
-	DrawnWindow(QWidget *parent = 0);
-	void paintEvent(QPaintEvent *) override;
-	void KeyPress(QMainWindow *parent = 0);
+    DrawnWindow(QWidget *parent = 0);
+    void paintEvent(QPaintEvent *) override;
+    void KeyPress(QMainWindow *parent = 0);
 protected:
     void keyPressEvent(QKeyEvent *) override;
     void keyReleaseEvent(QKeyEvent *) override;
@@ -22,8 +22,16 @@ protected:
     void dropEvent(QDropEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *e) override;
 
+    void contextMenuEvent(QContextMenuEvent *event) override;
+    void connectSD();
+    void disconnectSD();
+    void triggerNMI();
+signals:
+    void sdConnected();
+    void sdDisconnected();
+    void NMI();
 private:
-	QTimer *timer;
+    QTimer *timer;
 };
 
 #endif

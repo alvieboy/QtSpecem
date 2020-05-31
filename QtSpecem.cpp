@@ -8,6 +8,7 @@
 
 
 #include <QMessageBox>
+#include <QMenu>
 
 extern "C" void execute_if_running();
 
@@ -57,7 +58,7 @@ DrawnWindow::DrawnWindow(QWidget *parent) : QMainWindow(parent) {
 	//timer->start();
         //event->installEventFilter(this); //
 	timer->start(20); //
-    setAcceptDrops(true);
+        setAcceptDrops(true);
 }
 
 void DrawnWindow::paintEvent(QPaintEvent *) {
@@ -124,7 +125,7 @@ void DrawnWindow::keyPressEvent(QKeyEvent *event)
       
               case Qt::Key_Escape:
                      keybd_buff[0] |= ~0xFE; /* CAPS SHIFT */
-      
+                     /* Fall-through */
               case Qt::Key_Space:      keybd_buff[7] |= ~0xFE; break;
                case Qt::Key_M:  keybd_buff[7] |= ~0xFB; break;
                case Qt::Key_N:  keybd_buff[7] |= ~0xF7; break;
@@ -222,7 +223,7 @@ void DrawnWindow::keyReleaseEvent(QKeyEvent *event)
        
                case Qt::Key_Escape:
                      keybd_buff[0] &= 0xFE; /* CAPS SHIFT */
-       
+                     /* Fall-through */
                case Qt::Key_Space:      keybd_buff[7] &= 0xFE; break;
                 case Qt::Key_M: keybd_buff[7] &= 0xFB; break;
                case Qt::Key_N: keybd_buff[7] &= 0xF7; break;
@@ -339,3 +340,31 @@ void DrawnWindow::dropEvent(QDropEvent *e)
 
 }
 
+void DrawnWindow::contextMenuEvent(QContextMenuEvent *event)
+{
+    QMenu menu(this);
+    QAction *conn = new QAction("Connect SD card", &menu);
+    QAction *disconn = new QAction("Disconnect SD card", &menu);
+    QAction *nmi = new QAction("Trigger NMI", &menu);
+    connect( conn, &QAction::triggered, this, &DrawnWindow::connectSD);
+    connect( disconn, &QAction::triggered, this, &DrawnWindow::disconnectSD);
+    connect( nmi, &QAction::triggered, this, &DrawnWindow::triggerNMI);
+    menu.addAction( conn );
+    menu.addAction( disconn );
+    menu.addAction( nmi );
+    menu.exec(event->globalPos());
+}
+
+void DrawnWindow::connectSD()
+{
+    emit sdConnected();
+}
+
+void DrawnWindow::disconnectSD()
+{
+    emit sdDisconnected();
+}
+void DrawnWindow::triggerNMI()
+{
+    emit NMI();
+}
