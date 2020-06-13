@@ -7,8 +7,17 @@
 #include <QQueue>
 #include <QTimer>
 #include <inttypes.h>
-
 #include "expansion/expansion.h"
+
+#include "interfacez/EmptyResource.h"
+#include "interfacez/StringResource.h"
+#include "interfacez/StatusResource.h"
+#include "interfacez/DirectoryResource.h"
+#include "interfacez/WiFiListResource.h"
+#include "interfacez/OpStatusResource.h"
+#include "interfacez/Int8Resource.h"
+#include "interfacez/BinaryResource.h"
+
 class QTcpSocket;
 
 typedef enum {
@@ -32,172 +41,11 @@ typedef struct command
 } command_t;
 
 
-#define RESOURCE_TYPE_INVALID (0xff)
-#define RESOURCE_TYPE_INTEGER (0x00)
-#define RESOURCE_TYPE_STRING (0x01)
-#define RESOURCE_TYPE_BITMAP (0x02)
-#define RESOURCE_TYPE_DIRECTORYLIST (0x03)
-#define RESOURCE_TYPE_APLIST (0x04)
-
-struct Resource
-{
-    virtual uint8_t type() const = 0;
-    virtual uint16_t len() const = 0;
-    virtual void copyTo(QQueue<uint8_t> &dest) const = 0;
-};
-
-struct StringResource: public Resource
-{
-    StringResource(QString &s): m_str(s){
-    }
-    uint8_t type() const override { return 0x01; }
-    uint16_t len() const override { return m_str.length() + 1; }
-
-    void copyTo(QQueue<uint8_t> &queue) const override{
-        queue.push_back(m_str.length() & 0xff);
-        for (auto i: m_str) {
-            queue.push_back(i.toLatin1());
-        }
-    }
-private:
-    QString &m_str;
-};
-
-struct BinaryResource: public Resource
-{
-    BinaryResource(const uint8_t type, const uint8_t *data, unsigned len): m_type(type), m_data((const char*)data,len) {
-    }
-    BinaryResource(const uint8_t type, const QByteArray &data): m_type(type), m_data(data) {
-    }
-    uint8_t type() const override { return m_type; }
-    uint16_t len() const override { return m_data.length(); }
-    void copyTo(QQueue<uint8_t> &queue) const override{
-        for (auto i: m_data) {
-            queue.push_back(i);
-        }
-    }
-private:
-    uint8_t m_type;
-    QByteArray m_data;
-};
-
-struct EmptyResource: public Resource
-{
-    EmptyResource(const uint8_t type): m_type(type) {
-    }
-    uint8_t type() const override { return m_type; }
-    uint16_t len() const override { return 0; }
-    void copyTo(QQueue<uint8_t> &queue) const override{
-        Q_UNUSED(queue)
-    }
-private:
-    uint8_t m_type;
-};
-
-struct Int8Resource: public Resource
-{
-    Int8Resource(const uint8_t *val): m_ptr(val) {
-    }
-    uint8_t type() const override { return 0; }
-    uint16_t len() const override { return 1; }
-    void copyTo(QQueue<uint8_t> &queue) const override{
-        queue.push_back(*m_ptr);
-        qDebug()<<"VIDEO MODE "<<(*m_ptr);
-    }
-private:
-    const uint8_t *m_ptr;
-};
-
-struct StatusResource: public Resource
-{
-    StatusResource(): m_val(0) {
-    }
-    uint8_t type() const override { return RESOURCE_TYPE_INTEGER; }
-    uint16_t len() const override { return 1; }
-    void set(uint8_t val) {
-        m_val = val;
-    }
-    void setbit(uint8_t bit)
-    {
-        m_val = m_val | (1<<bit);
-    }
-    void clearbit(uint8_t bit)
-    {
-        m_val = m_val & ~(1<<bit);
-    }
-
-    uint8_t get() const {
-        return m_val;
-    }
-    void copyTo(QQueue<uint8_t> &queue) const override{
-        qDebug()<<"Sta "<<m_val;
-        queue.push_back( m_val );
-    }
-private:
-    uint8_t m_val;
-};
-
-struct DirectoryResource: public Resource
-{
-    DirectoryResource();
-    uint8_t type() const override;
-    uint16_t len() const override;
-    void copyTo(QQueue<uint8_t> &queue) const override;
-
-#define FLAG_FILE 0
-#define FLAG_DIRECTORY 1
-
-    struct fileentry {
-        fileentry(uint8_t f, const QString &n): flags(f), name(n) {
-        }
-        uint8_t flags;
-        QString name;
-    };
-    QList<struct fileentry> m_files;
-    QString m_cwd;
-};
-
-struct AccessPoint
-{
-    AccessPoint(uint8_t f, const QString &ss): flags(f), ssid(ss) {}
-    uint8_t flags;
-    QString ssid;
-};
 
 
-struct WiFiListResource: public Resource
-{
-    WiFiListResource(QList<AccessPoint>&aplist): m_accesspoints(aplist) {}
-    uint8_t type() const override { return RESOURCE_TYPE_APLIST; }
-    uint16_t len() const override;
-    void copyTo(QQueue<uint8_t> &queue) const override;
-private:
-    QList<AccessPoint> &m_accesspoints;
-};
 
-struct OpStatusResource: public Resource
-{
-    OpStatusResource(): m_val(0xff) {
-    }
-    uint8_t type() const override { return 0x05; }
-    uint16_t len() const override { return m_str.length() + 2; }
 
-    void copyTo(QQueue<uint8_t> &queue) const override{
-        printf("Reading status: %d\n", m_val);
-        queue.push_back(m_val);
-        queue.push_back(m_str.length() & 0xff);
-        for (auto i: m_str) {
-            queue.push_back(i.toLatin1());
-        }
-    }
-    void setStatus(uint8_t val, const QString &msg){
-        m_val=val;
-        m_str = msg;
-    }
-private:
-    uint8_t m_val;
-    QString m_str;
-};
+
 
 
 class InterfaceZ: public QObject
@@ -277,7 +125,7 @@ private:
     OpStatusResource m_opstatusresource;
     Int8Resource m_videomoderesource;
     uint8_t m_videomode;
-    QList<AccessPoint> m_aplist;
+    QList<WiFiListResource::AccessPoint> m_aplist;
     QTimer m_scantimer;
     QTimer m_connecttimer;
 };
@@ -291,20 +139,5 @@ private:
 #define FLAG_CAPSYNCEN (1<<6)
 #define FLAG_FORCEROMCS (1<<7)
 
-#include <QFile>
-
-class SnaFile
-{
-public:
-    SnaFile(const QString &n): m_file(n)
-    {
-    }
-    int open();
-    void write(const uint8_t val);
-    void write(const uint8_t *buf, size_t len);
-    void close();
-private:
-    QFile m_file;
-};
 
 #endif

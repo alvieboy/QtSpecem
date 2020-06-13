@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QByteArray>
 #include "sna_relocs.h"
+#include "SnaFile.h"
 
 #define LOGONAME logo2
 #include "logo2.xbm"
@@ -240,11 +241,10 @@ UCHAR InterfaceZ::ioread(UCHAR address)
         break;
 
     case 0x1F: // Joy port
-        val = 0xff;
+        val = 0x00;
         break;
     }
 
-    //printf("InterfaceZ IOREAD 0x%02x: 0x%02x\n",  address, val);
     return val;
 }
 
@@ -392,9 +392,6 @@ void InterfaceZ::eval_command()
 
 void InterfaceZ::iowrite(UCHAR address, UCHAR value)
 {
-    //printf("IOW %d\n", address);
-//    qDebug()<<"InterfaceZ IOWRITE "<<(int)address<<"value"<<(int)value;
-
     switch (address) {
     case 0x09: // Cmd fifo
         if (m_cmdfifo.size()<32) {
@@ -1300,10 +1297,11 @@ void WiFiListResource::copyTo(QQueue<uint8_t> &queue) const
 void InterfaceZ::WiFiScanFinished()
 {
     m_aplist.clear();
-    m_aplist.push_back( AccessPoint(0x01, "Wifi1") );
-    m_aplist.push_back( AccessPoint(0x01, "Wifi2") );
-    m_aplist.push_back( AccessPoint(0x00, "OpenWifi3") );
-    m_aplist.push_back( AccessPoint(0x01, "Wifi4TestLongName") );
+    m_aplist.push_back( WiFiListResource::AccessPoint(0x01, "Wifi1") );
+    m_aplist.push_back( WiFiListResource::AccessPoint(0x01, "Wifi2") );
+    m_aplist.push_back( WiFiListResource::AccessPoint(0x00, "OpenWifi3") );
+    m_aplist.push_back( WiFiListResource::AccessPoint(0x01, "Wifi4TestLongName") );
+
     m_statusresource.clearbit(STATUS_BIT_WIFI_SCANNING);
 }
 
@@ -1412,33 +1410,3 @@ void InterfaceZ::saveSNA()
     m_opstatusresource.setStatus(0xFF, "Saved"); // Set operation in progress
 }
 
-int SnaFile::open()
-{
-    if (!m_file.open(QIODevice::WriteOnly|QIODevice::Truncate)){
-        return -1;
-    }
-    return 0;
-}
-void SnaFile::write(const uint8_t val)
-{
-    m_file.write((const char*)&val,1);
-}
-void SnaFile::write(const uint8_t *buf, size_t len)
-{
-    m_file.write((const char*)buf, len);
-}
-void SnaFile::close()
-{
-    m_file.close();
-}
-
-
-
-/*
- 00000000  3f 58 27 9b 36 21 14 80  00 a8 3f 80 58 01 00 8b  |?X'.6!....?.X...|
- 00000010  85 de 9d fe 78 94 58 fa  9c 01 bf 05 00 00 00 00  |....x.X.........|
-                    ~~ ~~                 ~~
-
-                    19 20                 26
-
-                    */
