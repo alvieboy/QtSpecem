@@ -3,7 +3,7 @@ INCLUDEPATH += .
 QT += widgets network
 RESOURCES += QtSpecem.qrc
 ICON = icon.icns
-CONFIG += app_bundle
+CONFIG += app_bundle debug
 
 # Input
 HEADERS += QtSpecem.h \
@@ -48,7 +48,7 @@ SOURCES += main.cpp \
            z80core/stack.c \
            expansion/expansion.c \
            interfacez/interfacez.cpp \
-           interfacez/SnaFile.cpp \
-           interfacez/sna_relocs.c 
+           interfacez/hdlc_decoder.c \ 
+           interfacez/hdlc_encoder.c
 
 RESOURCES += QtSpecem.qrc

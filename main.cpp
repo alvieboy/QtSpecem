@@ -49,7 +49,7 @@ int main(int argc, char **argv)
 
     filename = ":/rom/spectrum.rom";
 
-    printf("USing rom %s\n", filename.toLatin1().constData());
+    printf("Using rom %s\n", filename.toLatin1().constData());
     QFile file(filename);
 
     init_pallete();
@@ -74,11 +74,13 @@ int main(int argc, char **argv)
         fprintf(stderr,"Cannot init InterfaceZ\n");
         return -1;
     }
+
     if (customrom) {
         iz->loadCustomROM(customrom);
     }
-    QObject::connect( keyPress, &DrawnWindow::sdConnected, iz, &InterfaceZ::onSDConnected);
-    QObject::connect( keyPress, &DrawnWindow::sdDisconnected, iz, &InterfaceZ::onSDDisconnected);
+
+    //QObject::connect( keyPress, &DrawnWindow::sdConnected, iz, &InterfaceZ::onSDConnected);
+    //QObject::connect( keyPress, &DrawnWindow::sdDisconnected, iz, &InterfaceZ::onSDDisconnected);
     QObject::connect( keyPress, &DrawnWindow::NMI, iz, &InterfaceZ::onNMI);
 
     int lindex = 0;
