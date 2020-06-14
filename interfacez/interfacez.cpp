@@ -34,6 +34,8 @@
 #define FPGA_FLAG_TRIG_FORCENMI_ON        (1<<6)
 #define FPGA_FLAG_TRIG_FORCENMI_OFF       (1<<7)
 
+#define FPGA_FLAG_RSTSPECT (1<<1)
+
 
 extern "C" {
 #include "z80core/iglobal.h"
@@ -69,6 +71,10 @@ extern "C" {
     {
         nmi_rom = rom;
         nmi_pending = 1;
+    }
+    void reset_spectrum() {
+        set_current_rom(NULL);
+        do_reset();
     }
 }
 
@@ -485,7 +491,15 @@ void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
     if (datalen<3)
         throw DataShortException();
 
+    uint16_t old_flags = fpga_flags;
+
     fpga_flags = ((uint16_t)data[0]) | (data[2]<<8);
+
+    if ( (old_flags & FPGA_FLAG_RSTSPECT)
+        && !(fpga_flags & FPGA_FLAG_RSTSPECT) ) {
+        reset_spectrum();
+    }
+
 
     // Triggers
     
