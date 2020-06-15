@@ -27,6 +27,7 @@ class QTcpSocket;
 #define FPGA_CMD_WRITE_ROM (0xE1)
 #define FPGA_CMD_WRITE_RES_FIFO (0xE3)
 #define FPGA_CMD_WRITE_TAP_FIFO (0xE4)
+#define FPGA_CMD_WRITE_TAP_FIFO_CMD (0xE6)
 #define FPGA_CMD_GET_TAP_FIFO_USAGE (0xE5)
 #define FPGA_CMD_SET_FLAGS (0xEC)
 #define FPGA_CMD_SET_REGS32 (0xED)
@@ -96,7 +97,9 @@ protected:
     void fpgaSetRegs32(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaGetRegs32(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaReadCmdFifo(const uint8_t *data, int datalen, uint8_t *txbuf);
-
+    void fpgaWriteTapFifo(const uint8_t *data, int datalen, uint8_t *txbuf);
+    void fpgaWriteTapFifoCmd(const uint8_t *data, int datalen, uint8_t *txbuf);
+    void fpgaGetTapFifoUsage(const uint8_t *data, int datalen, uint8_t *txbuf);
     void cmdFifoWriteEvent();
 
     class DataShortException : public std::exception {
@@ -142,6 +145,8 @@ protected:
         target = *source++;
         return source;
     }
+signals:
+    void tapDataReady();
 
 private:
     QTcpServer *m_fpgasocket;
@@ -167,6 +172,8 @@ private:
 
     QQueue<uint8_t> m_resourcefifo;
     QQueue<uint8_t> m_cmdfifo;
+    QQueue<uint16_t> m_tapfifo;
+
     QList<Client*> m_clients;
     uint16_t fpga_flags;
 };
