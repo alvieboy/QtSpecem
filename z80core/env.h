@@ -73,11 +73,11 @@ extern USHORT parity_table[256];
 
 /* Increment counter by (cycles)
  */
-#define T(cycles) (clock_ticks += cycles)
+#define T(cycles) do { clock_ticks += cycles; clock_ticks_since_startup += cycles; } while (0)
 
 /* Decrement counter by (cycles)
  */
-#define dT(cycles) (clock_ticks -= cycles)
+#define dT(cycles) (clock_ticks -= cycles; clock_ticks_since_startup -= cycles)
 
 /* Macro to put adress in PC
  */
@@ -87,11 +87,14 @@ extern USHORT parity_table[256];
  */
 UCHAR readROM(USHORT addr);
 UCHAR readRAM(USHORT addr);
+unsigned long long get_clock_cycles_since_startup();
+unsigned long get_clock_ticks();
 //#define readbyte(adress) (*(mem+(USHORT)(adress)))
 
 /* read word pointed to PC and sum 2 to PC
  */
 #define Getnextword() (PC += 2, readword((USHORT)(PC - 2)) )
+
 
 extern void retn_called_hook(void);
 /* read byte pointed to PC and increment it
