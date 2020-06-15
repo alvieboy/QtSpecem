@@ -62,6 +62,7 @@ struct Z80vars
   70938 'ticks' between each int (50 per second)
    */
    unsigned long  clock_ticks;
+   unsigned long long clock_ticks_since_startup;
 
    UCHAR   R, R_BIT7,  I;
 
@@ -100,6 +101,7 @@ struct Z80vars
 #define SP Z80vars->SP
 #define Q Z80vars->Q
 #define clock_ticks Z80vars->clock_ticks
+#define clock_ticks_since_startup Z80vars->clock_ticks_since_startup
 #define R Z80vars->R
 #define R_BIT7 Z80vars->R_BIT7
 #define I Z80vars->I
