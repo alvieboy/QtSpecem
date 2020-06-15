@@ -36,6 +36,7 @@
 
 #define FPGA_FLAG_RSTSPECT (1<<1)
 
+static QList<unsigned long long> audio_event_queue;
 
 extern "C" {
 #include "z80core/iglobal.h"
@@ -75,6 +76,18 @@ extern "C" {
     void reset_spectrum() {
         set_current_rom(NULL);
         do_reset();
+    }
+
+    extern void toggle_audio();
+
+    void insn_executed(unsigned long long ticks) {
+        if (audio_event_queue.size()) {
+            unsigned long long expires = audio_event_queue.front();
+            if (expires > ticks) {
+                audio_event_queue.pop_front();
+                toggle_audio();
+            }
+        }
     }
 }
 
@@ -387,8 +400,13 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
         fpgaWriteResFifo(data,datalen,txbuf);
         break;
     case FPGA_CMD_WRITE_TAP_FIFO:
+        fpgaWriteTapFifo(data,datalen,txbuf);
+        break;
+    case FPGA_CMD_WRITE_TAP_FIFO_CMD:
+        fpgaWriteTapFifoCmd(data,datalen,txbuf);
         break;
     case FPGA_CMD_GET_TAP_FIFO_USAGE:
+        fpgaGetTapFifoUsage(data,datalen,txbuf);
         break;
     case FPGA_CMD_SET_FLAGS:
         fpgaSetFlags(data, datalen, txbuf);
@@ -559,6 +577,44 @@ void InterfaceZ::fpgaWriteResFifo(const uint8_t *data, int datalen, uint8_t *txb
     }
     printf(" ]\n");
 }
+
+void InterfaceZ::fpgaWriteTapFifo(const uint8_t *data, int datalen, uint8_t *txbuf)
+{
+    Q_UNUSED(txbuf);
+    printf("TAP FIFO write: [");
+    while (datalen--) {
+        printf(" %02x", *data);
+        m_tapfifo.push_back(*data++);
+    }
+    emit tapDataReady();
+    printf(" ]\n");
+}
+
+void InterfaceZ::fpgaWriteTapFifoCmd(const uint8_t *data, int datalen, uint8_t *txbuf)
+{
+    Q_UNUSED(txbuf);
+    printf("TAP FIFO write (cmd): [");
+    while (datalen--) {
+        printf(" %02x", *data);
+        m_tapfifo.push_back((*data++)| 0x0100);
+    }
+    emit tapDataReady();
+    printf(" ]\n");
+}
+
+void InterfaceZ::fpgaGetTapFifoUsage(const uint8_t *data, int datalen, uint8_t *txbuf)
+{
+    Q_UNUSED(data);
+    Q_UNUSED(datalen);
+
+    uint16_t usage = m_tapfifo.size();
+    if (usage>1023) {
+        usage |= 0x8000;
+    }
+    txbuf[0] = usage >> 8;
+    txbuf[1] = usage & 0xff;
+}
+
 
 void InterfaceZ::fpgaSetRegs32(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
