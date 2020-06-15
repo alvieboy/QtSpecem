@@ -11,6 +11,7 @@
 #include <string.h>
 
 void save_sna(const char * file_name);
+void insn_executed(unsigned long long clock);
 
 /* Increment the lower 7 bits of R in each M1 cycle
 */
@@ -20,6 +21,16 @@ void save_sna(const char * file_name);
 //static UCHAR opcode;
 
 int ChangeFlashTime = 0;
+
+unsigned long long get_clock_cycles_since_startup()
+{
+    return clock_ticks_since_startup;
+}
+
+unsigned long get_clock_ticks()
+{
+    return clock_ticks;
+}
 
 /*=========================================================================*
  *                            do_reset                                     *
@@ -93,6 +104,7 @@ void execute()
                  TraceOn--;
            }
         }
+        insn_executed(clock_ticks_since_startup);
 	}
         while( (clock_ticks < INT_TIME) && !TraceOn );
    
