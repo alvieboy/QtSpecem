@@ -9,7 +9,6 @@
 #include "sna_relocs.h"
 #include "SnaFile.h"
 
-
 /* FPGA IO ports */
 
 #define FPGA_PORT_SCRATCH0	(0x23)
@@ -38,6 +37,9 @@
 
 static QList<unsigned long long> audio_event_queue;
 
+static void log_audio(unsigned long long);
+static void log_init(const char *filename);
+
 extern "C" {
 #include "z80core/iglobal.h"
 #include "z80core/z80.h"
@@ -46,6 +48,9 @@ extern "C" {
     void save_sna(const char * file_name);
     extern void open_sna(const char*);
     extern uint16_t read_DE();
+
+    extern unsigned long long get_clock_ticks_since_startup(void);
+
     void execute_if_running()
     {
         if (nmi_pending) {
@@ -81,13 +86,41 @@ extern "C" {
     extern void toggle_audio();
 
     void insn_executed(unsigned long long ticks) {
+        //printf("%lld\n", ticks);
         if (audio_event_queue.size()) {
             unsigned long long expires = audio_event_queue.front();
-            if (expires > ticks) {
+            if (expires <= ticks) {
+                //printf("Audio event %lld %lld\n", expires, ticks);
                 audio_event_queue.pop_front();
                 toggle_audio();
             }
         }
+    }
+
+    unsigned long long startpos;
+
+    void audio_start()
+    {
+        startpos = get_clock_ticks_since_startup();
+        printf("Start play %lld\n", startpos);
+    }
+
+    void audio_push(unsigned delta)
+    {
+        startpos += delta;
+        //printf("Pulse %u\n", delta);
+        audio_event_queue.push_back( startpos );
+        log_audio(startpos);
+    }
+
+    void audio_pause(unsigned long delta)
+    {
+        startpos += delta;
+    }
+
+    bool audio_has_data()
+    {
+        return audio_event_queue.size() > 0;
     }
 }
 
@@ -340,6 +373,7 @@ void InterfaceZ::onNMI()
     for (auto i: m_clients) {
         i->gpioEvent(PIN_NUM_SWITCH);
     }
+    
 }
 
 void InterfaceZ::loadCustomROM(const char *name)
@@ -582,12 +616,16 @@ void InterfaceZ::fpgaWriteTapFifo(const uint8_t *data, int datalen, uint8_t *txb
 {
     Q_UNUSED(txbuf);
     printf("TAP FIFO write: [");
-    while (datalen--) {
-        printf(" %02x", *data);
-        m_tapfifo.push_back(*data++);
+    int i;
+    for (i=0;i<datalen;i++) {
+        printf(" %02x", data[i]);
     }
-    emit tapDataReady();
     printf(" ]\n");
+
+    while (datalen--) {
+        m_player.handleStreamData(*data);
+        data++;
+    }
 }
 
 void InterfaceZ::fpgaWriteTapFifoCmd(const uint8_t *data, int datalen, uint8_t *txbuf)
@@ -595,10 +633,10 @@ void InterfaceZ::fpgaWriteTapFifoCmd(const uint8_t *data, int datalen, uint8_t *
     Q_UNUSED(txbuf);
     printf("TAP FIFO write (cmd): [");
     while (datalen--) {
+        m_player.handleStreamData(*data | 0x100);
         printf(" %02x", *data);
-        m_tapfifo.push_back((*data++)| 0x0100);
+        data++;
     }
-    emit tapDataReady();
     printf(" ]\n");
 }
 
@@ -680,3 +718,286 @@ void InterfaceZ::cmdFifoWriteEvent()
 
 
 
+void TapePlayer::handleStreamData(uint16_t data)
+{
+    if (data & 0x100) {
+        handleCommand(data & 0xff);
+    } else {
+        handleData(data & 0xff);
+    }
+}
+
+void TapePlayer::sendPilot()
+{
+    unsigned i;
+    for (i=0;i<pilot_header_len*2;i++) {
+        audio_push(pilot_len);
+    }
+}
+
+void TapePlayer::sendSync()
+{
+    audio_push(sync0_len);
+    audio_push(sync1_len);
+}
+
+void TapePlayer::gotType(uint8_t data)
+{
+    type = data;
+    blocklen--;
+    if (!playing) {
+        playing = true;
+        audio_start();
+        log_init("audio.vcd");
+    }
+    if (standard) {
+        sendPilot();
+        sendSync();
+    }
+    if (blocklen>1)
+        sendByte(type);
+    else
+        sendByte(type, lastbytelen);
+
+    printf("TAP: play chunk size %d\n", blocklen);
+}
+void TapePlayer::handleData(uint8_t data)
+{
+    switch (state) {
+    case TAP_IDLE:
+        if (!len_external) {
+            blocklen = data;
+            printf("Block len0: [ %02x ]\n", data);
+            state = TAP_BLOCKLEN;
+        } else {
+            gotType(data);
+            state = TAP_PLAY;
+        }
+        break;
+    case TAP_BLOCKLEN:
+        blocklen += ((uint32_t)data)<<8;
+        printf("Block len1: [ %04x ]\n", blocklen);
+        state = TAP_TYPE;
+        break;
+
+    case TAP_TYPE:
+        gotType(data);
+        state = TAP_PLAY;
+        break;
+
+    case TAP_PLAY:
+        blocklen--;
+        if (blocklen==0) {
+            //printf("Data byte: [ %02x ] (%d)\n", data, lastbytelen);
+            sendByte(data, lastbytelen);
+            //if (standard) {
+            //    gap( 10 );
+            //} else {
+                gap ( gap_len );
+            //}
+            state = TAP_IDLE;
+        } else {
+            //printf("Data byte: [ %02x ]\n", data);
+            sendByte(data);
+        }
+        break;
+    }
+}
+
+#define CMDDEBUG(x...) do { printf("DBG: "); printf(x); printf("\n"); } while (0);
+
+void TapePlayer::handleCommand(uint8_t data)
+{
+    uint16_t val16;
+    switch (state) {
+    case TAP_IDLE:
+
+        if (!(data & 0x80)) {
+            dptr = 0;
+            cmd = data & 0x7F;
+            //CMDDEBUG("%02x: Need argument", data);
+            state = TAP_CMDDATA;
+        } else {
+            // Single byte command
+            switch (data) {
+            case 0x80:
+                CMDDEBUG("Resetting values");
+                reset();
+                break;
+            case 0x82:
+                CMDDEBUG("Setting LEN to external");
+                len_external=true;
+                break;
+            case 0x83:
+                CMDDEBUG("Setting LEN to internal");
+                len_external=false;
+                break;
+            case 0x84:
+                CMDDEBUG("Setting PURE");
+                standard=false;
+                break;
+            case 0x85:
+                CMDDEBUG("Setting STANDARD");
+                standard=true;
+                break;
+            }
+        }
+        break;
+    case TAP_CMDDATA:
+        dbuf[dptr++] = data;
+        if (dptr==2) {
+            val16 = ((uint16_t)dbuf[0]) + (uint16_t(dbuf[1])<<8);
+            switch (cmd) {
+            case 0x00: pilot_len = val16; break;
+            case 0x01: sync0_len = val16; break;
+            case 0x02: sync1_len = val16; break;
+            case 0x03: logic0_len = val16; break;
+            case 0x04: logic1_len = val16; break;
+            case 0x08: pilot_header_len = val16; break;
+            case 0x09: pilot_data_len = val16; break;
+            case 0x0A: gap_len = val16; break;
+            case 0x0B: blocklen = val16; break;
+            case 0x0C: blocklen += ((uint32_t)val16&0xff)<<16;
+                       lastbytelen = 8-((val16>>8) & 0x7);
+                       break;
+            case 0x0e: repeat = val16; break;
+            case 0x0d: {
+                // Play pulse data.
+                CMDDEBUG("Pulse %d (repeat %d)", val16, repeat);
+                unsigned i;
+                for (i=0; i<=repeat;i++) {
+                    audio_push(val16);
+                }
+            }
+            break;
+
+            default:
+                break;
+            }
+            dptr = 0;
+            state = TAP_IDLE;
+
+        }
+    default:
+        break;
+    }
+}
+
+void TapePlayer::sendBit(uint8_t value)
+{
+    if (value) {
+        audio_push(logic1_len);
+        audio_push(logic1_len);
+    } else {
+        audio_push(logic0_len);
+        audio_push(logic0_len);
+    }
+}
+
+void TapePlayer::gap(uint32_t val_ms)
+{
+    printf("GAP %d ms (%ld ticks)", val_ms, (unsigned long)val_ms * 3500UL);
+    audio_pause( val_ms * 3500 );
+}
+
+void TapePlayer::sendByte(uint8_t value, uint8_t bytelen)
+{
+    while (bytelen--) {
+        sendBit(value & 0x80);
+        value<<=1;
+    }
+}
+
+void TapePlayer::reset()
+{
+    pilot_len = DEFAULT_PILOT;
+    sync0_len = DEFAULT_SYNC0;
+    sync1_len = DEFAULT_SYNC1;
+    logic0_len = DEFAULT_LOGIC0;
+    logic1_len = DEFAULT_LOGIC1;
+    gap_len = DEFAULT_GAP;
+    pilot_header_len = DEFAULT_PILOT_HEADER_LEN;
+    pilot_data_len = DEFAULT_PILOT_HEADER_LEN;
+    len_external = false;
+    standard = true;
+    lastbytelen = 8;
+};
+
+TapePlayer::TapePlayer()
+{
+    reset();
+    state = TAP_IDLE;
+    playing = false;
+}
+
+static FILE *vcdfile = NULL;
+
+static uint8_t audioval = 0;
+
+void log_audio(unsigned long long tick)
+{
+    audioval = !audioval;
+    if (vcdfile) {
+        fprintf(vcdfile, "#%lld\n"
+                "b%d a\n", tick, audioval);
+
+    }
+}
+
+static void log_init(const char *filename)
+{
+    vcdfile = fopen(filename,"w");
+    if (vcdfile!=NULL) {
+        fprintf(vcdfile,
+                "$date\n"
+                "Tue Dec  4 19:27:08 2020\n"
+                "$end\n"
+                "$version\n"
+                "GHDL v0\n"
+                "$end\n"
+                "$timescale\n"
+                "28.571429 ns\n"
+                "$end\n"
+                "$var wire 1 a AUDIO $end\n"
+                "$enddefinitions $end\n"
+               );
+    }
+}
+
+/*
+ 13 00 00 00 73 6b 6f 6f 6c 64 61 7a 65 20 1b 00 0a 00 1b 00 44
+
+ 1d 00 ff 00
+ 0a 05 00 ef 22 22 af 0d 00 14 0e 00 f9 c0 32 33 32 39 36 0e 00 00 00 5b 00 0d fa 13 00 00 03 73 6b 6f 6f 
+
+/*
+ 13 00 00 00 73 6b 6f 6f 6c 64 61 7a 65 20 1b 00 0a 00 1b 00 44 1d 00 ff 00
+
+ 0a 05 00 ef 22 22 af  |....D........"".|
+00000020  0d 00 14 0e 00 f9 c0 32  33 32 39 36 0e 00 00 00  |.......23296....|
+00000030  5b 00 0d fa 13 00 00 03  73 6b 6f 6f 6c 64 61 7a  |[.......skooldaz|
+00000040  65 20 12 1b 00 40 00 00  04 14 1b ff ff ff ff ff  |e ...@..........|
+00000050  ff ff ff ff ff fe 0f ff  ff f1 ff ff e0 00 78 ff  |..............x.|
+00000060  ff 82 00 0f 00 1f f8 00  f0 fd 55 55 ff ff ff ff  |..........UU....|
+00000070  ff ff ff ff fa 0f ff ff  ff f8 ff d5 f0 00 7f f8  |................|
+00000080  03 f0 00 06 00 fe 07 07  c0 85 55 55 ff ff ff ff  |..........UU....|
+00000090  ff ff ff f4 0f ff ff ff  ff fe 7f d5 78 00 7f f8  |............x...|
+000000a0  05 10 00 1a e0 01 c2 ff  c0 85 55 55 ff ff ff ff  |..........UU....|
+000000b0  ff ff e8 0f ff ff ff ff  ff ff 3f f5 7c 00 7f ff  |..........?.|...|
+000000c0  ea aa bb aa ae 00 7f ff  c0 85 55 55 ff ff ff ff  |..........UU....|
+000000d0  ff d0 0f ff ff ff ff ff  ff ff 8f f5 5f 00 7f ff  |............_...|
+000000e0  ea aa ae ae ae b0 1f ff  00 85 55 55 ff ff ff ff  |..........UU....|
+000000f0  a0 0f ff fc ff ff ff ff  ff ff c7 fd 5f 00 3f ff  |............_.?.|
+00000100  fa aa af ea ab fe ff e0  00 85 55 55 ff ff fe 40  |..........UU...@|
+00000110  0f ff ff ff 3f ff ff e1  e6 7f e3 fd 57 ff ff ff  |....?.......W...|
+00000120  fe aa af ea ab fb ff ff  ff 85 55 55 ff fc 40 0f  |..........UU..@.|
+00000130  ff ff f9 fb c0 ff ff 79  e3 bf f9 ff 57 c0 03 ff  |.......y....W...|
+00000140  fe aa af ea ab ff f8 00  00 85 55 55 ff ff ff ff  |..........UU....|
+00000150  ff ff ff ff ff f4 1f ff  ff f1 ff aa e0 00 78 ff  |..............x.|
+00000160  ff fd 00 07 00 0f f8 00  f0 86 aa aa ff ff ff ff  |................|
+00000170  ff ff ff ff f4 1f ff ff  ff f8 ff aa f0 00 7f f0  |................|
+00000180  00 d0 00 0f 00 f8 03 07  c0 86 aa aa ff ff ff ff  |................|
+00000190  ff ff ff e8 1f ff ff ff  ff fe 7f ea fc 00 7f fc  |................|
+000001a0  0f 78 00 3f e0 00 e3 ff  c0 86 aa aa ff ff ff ff  |.x.?............|
+000001b0  ff ff d0 1f ff ff ff ff  ff ff 3f ea be 00 7f ff  |..........?.....|
+*/

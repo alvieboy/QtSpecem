@@ -24,6 +24,8 @@ UCHAR get_sbrdr(void)
 // LIXO
 short  reset = 1;
 
+extern void border_updated(UCHAR color, unsigned long ticks);
+
 /*=========================================================================*
  *                            writeport                                    *
  *=========================================================================*/
@@ -38,13 +40,15 @@ void writeport(USHORT port, UCHAR value)
      }
      else
      */
-    if (!(port & 1)) {       // ULA
 
+    if (!(port & 1)) {       // ULA
         // ULA Bits:  0-2:  border
         //              3:  0 activates MIC output
         //              4:  1 activates EAR / Internal Speaker
 
         borderColor = value & 7;
+
+        border_updated(borderColor, get_clock_ticks());
 
         out_ula = value;
 
@@ -95,7 +99,17 @@ KEYS:
 UCHAR joystick = 0x00;      /*     FIRE  UP  DOWN  RIGHT LEFT */
 				 /* 000  b4   b3   b2    b1    b0  */
 
+UCHAR audio_on = 0;
+
+void toggle_audio()
+{
+    audio_on = !audio_on;
+    //printf("Audio %d\n", audio_on);
+}
+
 #include <stdio.h>
+
+extern void insn_executed(unsigned long long);
 
 /*=========================================================================*
  *                            readport                                     *
@@ -108,6 +122,7 @@ UCHAR readport(USHORT port)
     /* ULA --  b7  b6    b5 b4b3b2b1b0 */
     /*         1   1    EAR  KEY_CODE  */
 
+//    insn_executed(clock_ticks_since_startup);
 
 
     // Just here to run USSPIRITS.Z80
@@ -177,6 +192,11 @@ UCHAR readport(USHORT port)
                 value &= 0xbf;
             }
 
+            if (audio_on) {
+                value |= (1<<6);
+            } else {
+                value &= ~(1<<6);
+            }
             /*
              I should implement this also:
              if( !ear_on && mic_on )
@@ -196,6 +216,7 @@ UCHAR readport(USHORT port)
 
             //f (!bModel3)
             //		value ^= BIT_5;
+
         }
         else
         {

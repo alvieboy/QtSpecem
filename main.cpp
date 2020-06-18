@@ -52,8 +52,10 @@ int main(int argc, char **argv)
     printf("Using rom %s\n", filename.toLatin1().constData());
     QFile file(filename);
 
+    printf("Init pallete\n");
     init_pallete();
     
+    printf("Init emul\n");
     init_emul();
 
     //draw.show();

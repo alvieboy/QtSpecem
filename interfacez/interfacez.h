@@ -11,6 +11,8 @@
 #include "hdlc_decoder.h"
 #include "hdlc_encoder.h"
 #include <stdexcept>
+#include "Tape.h"
+
 class QTcpSocket;
 
 
@@ -149,6 +151,7 @@ signals:
     void tapDataReady();
 
 private:
+    TapePlayer m_player;
     QTcpServer *m_fpgasocket;
     uint8_t customrom[16384];
     bool customromloaded;

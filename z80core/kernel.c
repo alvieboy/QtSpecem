@@ -22,7 +22,7 @@ void insn_executed(unsigned long long clock);
 
 int ChangeFlashTime = 0;
 
-unsigned long long get_clock_cycles_since_startup()
+unsigned long long get_clock_ticks_since_startup(void)
 {
     return clock_ticks_since_startup;
 }
@@ -53,6 +53,8 @@ void do_reset()
    Z80_P = Z80_N = Z80_C = 0;
    /* Interrupt counter */
    ResetTickCounter();
+   clock_ticks_since_startup = 0;
+
    T(3);
    /* Program Counter */
    PutPC(0);
