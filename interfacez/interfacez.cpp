@@ -247,6 +247,10 @@ void InterfaceZ::addConnection(QAbstractSocket *s)
 
 void InterfaceZ::setCommsSocket(int sock)
 {
+
+    QAbstractSocket *s = new QAbstractSocket(QAbstractSocket::UnknownSocketType,this);
+    s->setSocketDescriptor(sock);
+    addConnection(s);
 }
 
 
