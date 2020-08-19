@@ -7,19 +7,20 @@
 extern "C" {
 #endif
 
-int register_expansion_port(UCHAR port, UCHAR mask,
-                            UCHAR (*readfn)(void *,UCHAR port),
-                            void (*writefn)(void *,UCHAR port, UCHAR val),
+int register_expansion_port(USHORT port, USHORT mask,
+                            UCHAR (*readfn)(void *,USHORT port),
+                            void (*writefn)(void *,USHORT port, UCHAR val),
                             void *userdata
                            );
 
-int readport_expansion(UCHAR port, UCHAR *value);
-int writeport_expansion(UCHAR port, UCHAR value);
+int readport_expansion(USHORT port, UCHAR *value);
+int writeport_expansion(USHORT port, UCHAR value);
 
-void set_current_rom(const UCHAR *address);
+void set_enable_external_rom(int enabled);
 
 UCHAR readROM(USHORT addr);
 UCHAR readRAM(USHORT addr);
+void writeROM(USHORT addr, UCHAR value);
 
 extern void rom_access_hook(USHORT,UCHAR);
 

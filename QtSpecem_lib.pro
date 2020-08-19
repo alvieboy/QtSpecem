@@ -1,3 +1,5 @@
+TEMPLATE = lib
+QT += widgets
 TARGET = QtSpecem
 INCLUDEPATH += .
 QT += widgets network

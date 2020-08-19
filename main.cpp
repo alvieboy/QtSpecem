@@ -7,6 +7,9 @@
 #include "QtSpecem.h"
 #include "interfacez/interfacez.h"
 #include <getopt.h>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QPushButton>
 
 extern "C" void init_emul();
 extern "C" void init_pallete();
@@ -22,8 +25,35 @@ int main(int argc, char **argv)
 {
 
     QApplication app(argc, argv);
-    DrawnWindow draw;
-    DrawnWindow *keyPress = new DrawnWindow();
+    //DrawnWindow draw;
+    SpectrumWidget *spectrumWidget = new SpectrumWidget();
+
+    QMainWindow *mainw = new EmulatorWindow();
+
+    //spectrumWidget->installEventFilter(mainw);
+
+    QWidget *mainwidget = new QWidget();
+
+    mainw->setCentralWidget(mainwidget);
+
+    QVBoxLayout *l = new QVBoxLayout();
+    l->setSpacing(0);
+
+
+    mainwidget->setLayout(l);
+
+    // Add buttons.
+    QHBoxLayout *hl = new QHBoxLayout();
+    QPushButton *nmi = new QPushButton("NMI");
+    QPushButton *io0 = new QPushButton("IO0");
+    hl->addWidget(nmi);
+    hl->addWidget(io0);
+
+
+    l->addLayout(hl);
+    l->addWidget(spectrumWidget);
+    mainw->show();
+
     const char * p;
     QByteArray data;
     int i;
@@ -71,19 +101,25 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    iz = new InterfaceZ();
+    iz = InterfaceZ::get();
+
     if (iz->init()<0) {
         fprintf(stderr,"Cannot init InterfaceZ\n");
         return -1;
     }
 
+    iz->linkGPIO(nmi, 34);
+    iz->linkGPIO(io0, 0);
+
+
+
     if (customrom) {
         iz->loadCustomROM(customrom);
     }
 
-    //QObject::connect( keyPress, &DrawnWindow::sdConnected, iz, &InterfaceZ::onSDConnected);
-    //QObject::connect( keyPress, &DrawnWindow::sdDisconnected, iz, &InterfaceZ::onSDDisconnected);
-    QObject::connect( keyPress, &DrawnWindow::NMI, iz, &InterfaceZ::onNMI);
+    //QObject::connect( spectrumWidget, &DrawnWindow::sdConnected, iz, &InterfaceZ::onSDConnected);
+    //QObject::connect( spectrumWidget, &DrawnWindow::sdDisconnected, iz, &InterfaceZ::onSDDisconnected);
+    QObject::connect( spectrumWidget, &SpectrumWidget::NMI, iz, &InterfaceZ::onNMI);
 
     int lindex = 0;
     for (int index = optind; index < argc; index++) {
@@ -95,7 +131,7 @@ int main(int argc, char **argv)
     }
 
 
-    keyPress->show();
+    spectrumWidget->show();
 
     return app.exec();
 }

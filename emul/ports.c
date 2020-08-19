@@ -220,7 +220,7 @@ UCHAR readport(USHORT port)
         }
         else
         {
-            if (readport_expansion(~lport,&value)!=0) {
+            if (readport_expansion(port,&value)!=0) {
                 // Any other port --- this is not well implemented
                 if((clock_ticks  > 14346) && (clock_ticks < 57246))
                 {

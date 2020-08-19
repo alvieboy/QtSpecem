@@ -107,9 +107,9 @@ extern "C" void border_updated(uint8_t color, unsigned long ticks)
     border_color = color;
 }
 
-DrawnWindow::DrawnWindow(QWidget *parent) : QMainWindow(parent) {
+SpectrumWidget::SpectrumWidget(QWidget *parent) : QWidget(parent) {
 
-    setGeometry(0,0, ((256+(BORDER_HORIZONTAL*2))*2),
+    setMinimumSize(((256+(BORDER_HORIZONTAL*2))*2),
                 (192+(BORDER_VERTICAL*2))*2);
 
     memset(border_colors,0x7, sizeof(border_colors));
@@ -120,7 +120,7 @@ DrawnWindow::DrawnWindow(QWidget *parent) : QMainWindow(parent) {
     border_ptr = 0;
 }
 
-void DrawnWindow::drawBorder()
+void SpectrumWidget::drawBorder()
 {
     // Top border
     int i;
@@ -158,7 +158,7 @@ void DrawnWindow::drawBorder()
     }
 }
 
-void DrawnWindow::paintEvent(QPaintEvent *) {
+void SpectrumWidget::paintEvent(QPaintEvent *) {
     QPainter paint(this);
     drawBorder();
     paint.drawImage(0, 0, background.scaled(size()));
@@ -171,258 +171,258 @@ void DrawnWindow::paintEvent(QPaintEvent *) {
 
 int lParam;
 
-void DrawnWindow::keyPressEvent(QKeyEvent *event)
+void EmulatorWindow::keyPressEvent(QKeyEvent *event)
 {
     switch (event->key() )
     {
-       case Qt::Key_1:      keybd_buff[3] |= ~0xFE; break;
-               case Qt::Key_2:      keybd_buff[3] |= ~0xFD; break;
-               case Qt::Key_3:      keybd_buff[3] |= ~0xFB; break;
-               case Qt::Key_4:      keybd_buff[3] |= ~0xF7; break;
-               case Qt::Key_5:      keybd_buff[3] |= ~0xEF; break;
-               case Qt::Key_Q:      keybd_buff[2] |= ~0xFE; break;
-               case Qt::Key_W:      keybd_buff[2] |= ~0xFD; break;
-               case Qt::Key_E:      keybd_buff[2] |= ~0xFB; break;
-              case Qt::Key_R:      keybd_buff[2] |= ~0xF7; break;
-              case Qt::Key_T:      keybd_buff[2] |= ~0xEF; break;
-              case Qt::Key_A:      keybd_buff[1] |= ~0xFE; break;
-              case Qt::Key_S:      keybd_buff[1] |= ~0xFD; break;
-               case Qt::Key_D:      keybd_buff[1] |= ~0xFB; break;
-              case Qt::Key_F:      keybd_buff[1] |= ~0xF7; break;
-              case Qt::Key_G:      keybd_buff[1] |= ~0xEF; break;
-              case Qt::Key_CapsLock:
-                          keybd_buff[0] |= ~0xFE; /* CAPS SHIFT */
-                          break;
-              case Qt::Key_Control:
-              case Qt::Key_Shift:
-                        keybd_buff[7] |= ~0xFD; /* SYMBOL SHIFT */
-                      break;
-              case Qt::Key_Z:  keybd_buff[0] |= ~0xFD; break;
-               case Qt::Key_X:  keybd_buff[0] |= ~0xFB; break;
-              case Qt::Key_C:  keybd_buff[0] |= ~0xF7; break;
-              case Qt::Key_division:
-                               keybd_buff[7] |= ~0xFD; break;
-              case Qt::Key_V:  keybd_buff[0] |= ~0xEF; break;
-              case Qt::Key_0:  keybd_buff[4] |= ~0xFE; break;
-              case Qt::Key_9:  keybd_buff[4] |= ~0xFD; break;
-              case Qt::Key_8:  keybd_buff[4] |= ~0xFB; break;
-              case Qt::Key_7:  keybd_buff[4] |= ~0xF7; break;
-              case Qt::Key_6:  keybd_buff[4] |= ~0xEF; break;
-               case Qt::Key_P:  keybd_buff[5] |= ~0xFE; break;
-               case Qt::Key_O:  keybd_buff[5] |= ~0xFD; break;
-              case Qt::Key_I:  keybd_buff[5] |= ~0xFB; break;
-              case Qt::Key_U:  keybd_buff[5] |= ~0xF7; break;
-              case Qt::Key_Y:  keybd_buff[5] |= ~0xEF; break;
-               case Qt::Key_Return: keybd_buff[6] |= ~0xFE; break;
-               case Qt::Key_L:  keybd_buff[6] |= ~0xFD; break;
-              //case VK_ADD:
-              //         keybd_buff[7] |= ~0xFD; break;
-               case Qt::Key_K:  keybd_buff[6] |= ~0xFB; break;
-              //case VK_SUBTRACT:
-              //       keybd_buff[7] |= ~0xFD; break;
-              case Qt::Key_J:  keybd_buff[6] |= ~0xF7; break;
-              case Qt::Key_H:  keybd_buff[6] |= ~0xEF; break;
-      
-              case Qt::Key_Escape:
-                     keybd_buff[0] |= ~0xFE; /* CAPS SHIFT */
-                     /* Fall-through */
-              case Qt::Key_Space:      keybd_buff[7] |= ~0xFE; break;
-               case Qt::Key_M:  keybd_buff[7] |= ~0xFB; break;
-               case Qt::Key_N:  keybd_buff[7] |= ~0xF7; break;
-              //case VK_MULTIPLY:
-              //       keybd_buff[7] |= ~0xFD;
-              case Qt::Key_B:  keybd_buff[7] |= ~0xEF; break;
-      
-      
-               /* Special keys */
-               case Qt::Key_Tab: keybd_buff[0] |= ~0xFE;
-                   keybd_buff[7] |= ~0xFD;
-                   break;
-      
-              case Qt::Key_Backspace: keybd_buff[0] |= ~0xFE; /* CAPS SHIFT */
-                    keybd_buff[4] |= ~0xFE;
-                    break;
-      
-              /* kempston joystick */
-              case Qt::Key_Left:  joystick |= 2; break;
-              case Qt::Key_Right: joystick |= 1; break;
-              case Qt::Key_Up:    joystick |= 8; break;
-              case Qt::Key_Down:  joystick |= 4; break;
-              case Qt::Key_Alt: joystick |= 16; break;
-              /* Sinclair joystick */
-              //case VK_NUMPAD5:
-              //case VK_NUMPAD0: keybd_buff[0] |= ~0xFE;
-              //         keybd_buff[4] |= ~0xFE; /* 0 - fire  */
-              //          break;
-              // case VK_NUMPAD4: keybd_buff[0] |= ~0xFE;
-              //          keybd_buff[3] |= ~0xEF; /* 5 - left  */
-              //          break;
-              //case VK_NUMPAD6: keybd_buff[0] |= ~0xFE;
-              //         keybd_buff[4] |= ~0xFB; /* 8 - right */
-              //         break;
-              //case VK_NUMPAD8: keybd_buff[0] |= ~0xFE;
-              //          keybd_buff[4] |= ~0xF7; /* 7 - up    */
-              //         break;
-              //case VK_NUMPAD2: keybd_buff[0] |= ~0xFE;
-              //         keybd_buff[4] |= ~0xEF; /* 6 - down  */
-              //         break;
+    case Qt::Key_1:      keybd_buff[3] |= ~0xFE; break;
+    case Qt::Key_2:      keybd_buff[3] |= ~0xFD; break;
+    case Qt::Key_3:      keybd_buff[3] |= ~0xFB; break;
+    case Qt::Key_4:      keybd_buff[3] |= ~0xF7; break;
+    case Qt::Key_5:      keybd_buff[3] |= ~0xEF; break;
+    case Qt::Key_Q:      keybd_buff[2] |= ~0xFE; break;
+    case Qt::Key_W:      keybd_buff[2] |= ~0xFD; break;
+    case Qt::Key_E:      keybd_buff[2] |= ~0xFB; break;
+    case Qt::Key_R:      keybd_buff[2] |= ~0xF7; break;
+    case Qt::Key_T:      keybd_buff[2] |= ~0xEF; break;
+    case Qt::Key_A:      keybd_buff[1] |= ~0xFE; break;
+    case Qt::Key_S:      keybd_buff[1] |= ~0xFD; break;
+    case Qt::Key_D:      keybd_buff[1] |= ~0xFB; break;
+    case Qt::Key_F:      keybd_buff[1] |= ~0xF7; break;
+    case Qt::Key_G:      keybd_buff[1] |= ~0xEF; break;
+    case Qt::Key_CapsLock:
+        keybd_buff[0] |= ~0xFE; /* CAPS SHIFT */
+        break;
+    case Qt::Key_Control:
+    case Qt::Key_Shift:
+        keybd_buff[7] |= ~0xFD; /* SYMBOL SHIFT */
+        break;
+    case Qt::Key_Z:  keybd_buff[0] |= ~0xFD; break;
+    case Qt::Key_X:  keybd_buff[0] |= ~0xFB; break;
+    case Qt::Key_C:  keybd_buff[0] |= ~0xF7; break;
+    case Qt::Key_division:
+        keybd_buff[7] |= ~0xFD; break;
+    case Qt::Key_V:  keybd_buff[0] |= ~0xEF; break;
+    case Qt::Key_0:  keybd_buff[4] |= ~0xFE; break;
+    case Qt::Key_9:  keybd_buff[4] |= ~0xFD; break;
+    case Qt::Key_8:  keybd_buff[4] |= ~0xFB; break;
+    case Qt::Key_7:  keybd_buff[4] |= ~0xF7; break;
+    case Qt::Key_6:  keybd_buff[4] |= ~0xEF; break;
+    case Qt::Key_P:  keybd_buff[5] |= ~0xFE; break;
+    case Qt::Key_O:  keybd_buff[5] |= ~0xFD; break;
+    case Qt::Key_I:  keybd_buff[5] |= ~0xFB; break;
+    case Qt::Key_U:  keybd_buff[5] |= ~0xF7; break;
+    case Qt::Key_Y:  keybd_buff[5] |= ~0xEF; break;
+    case Qt::Key_Return: keybd_buff[6] |= ~0xFE; break;
+    case Qt::Key_L:  keybd_buff[6] |= ~0xFD; break;
+    //case VK_ADD:
+    //         keybd_buff[7] |= ~0xFD; break;
+    case Qt::Key_K:  keybd_buff[6] |= ~0xFB; break;
+    //case VK_SUBTRACT:
+    //       keybd_buff[7] |= ~0xFD; break;
+    case Qt::Key_J:  keybd_buff[6] |= ~0xF7; break;
+    case Qt::Key_H:  keybd_buff[6] |= ~0xEF; break;
+
+    case Qt::Key_Escape:
+        keybd_buff[0] |= ~0xFE; /* CAPS SHIFT */
+        /* Fall-through */
+    case Qt::Key_Space:      keybd_buff[7] |= ~0xFE; break;
+    case Qt::Key_M:  keybd_buff[7] |= ~0xFB; break;
+    case Qt::Key_N:  keybd_buff[7] |= ~0xF7; break;
+    //case VK_MULTIPLY:
+    //       keybd_buff[7] |= ~0xFD;
+    case Qt::Key_B:  keybd_buff[7] |= ~0xEF; break;
+
+
+    /* Special keys */
+    case Qt::Key_Tab: keybd_buff[0] |= ~0xFE;
+    keybd_buff[7] |= ~0xFD;
+    break;
+
+    case Qt::Key_Backspace: keybd_buff[0] |= ~0xFE; /* CAPS SHIFT */
+    keybd_buff[4] |= ~0xFE;
+    break;
+
+    /* kempston joystick */
+    case Qt::Key_Left:  joystick |= 2; break;
+    case Qt::Key_Right: joystick |= 1; break;
+    case Qt::Key_Up:    joystick |= 8; break;
+    case Qt::Key_Down:  joystick |= 4; break;
+    case Qt::Key_Alt: joystick |= 16; break;
+    /* Sinclair joystick */
+    //case VK_NUMPAD5:
+    //case VK_NUMPAD0: keybd_buff[0] |= ~0xFE;
+    //         keybd_buff[4] |= ~0xFE; /* 0 - fire  */
+    //          break;
+    // case VK_NUMPAD4: keybd_buff[0] |= ~0xFE;
+    //          keybd_buff[3] |= ~0xEF; /* 5 - left  */
+    //          break;
+    //case VK_NUMPAD6: keybd_buff[0] |= ~0xFE;
+    //         keybd_buff[4] |= ~0xFB; /* 8 - right */
+    //         break;
+    //case VK_NUMPAD8: keybd_buff[0] |= ~0xFE;
+    //          keybd_buff[4] |= ~0xF7; /* 7 - up    */
+    //         break;
+    //case VK_NUMPAD2: keybd_buff[0] |= ~0xFE;
+    //         keybd_buff[4] |= ~0xEF; /* 6 - down  */
+    //         break;
     }
 }
- 
-void DrawnWindow::keyReleaseEvent(QKeyEvent *event)
+
+void EmulatorWindow::keyReleaseEvent(QKeyEvent *event)
 {
     switch (event->key() )
     {
-               case Qt::Key_1: keybd_buff[3] &= 0xFE; break;
-                case Qt::Key_2: keybd_buff[3] &= 0xFD; break;
-               case Qt::Key_3: keybd_buff[3] &= 0xFB; break;
-               case Qt::Key_4: keybd_buff[3] &= 0xF7; break;
-               case Qt::Key_5: keybd_buff[3] &= 0xEF; break;
-               case Qt::Key_Q: keybd_buff[2] &= 0xFE; break;
-               case Qt::Key_W: keybd_buff[2] &= 0xFD; break;
-               case Qt::Key_E: keybd_buff[2] &= 0xFB; break;
-               case Qt::Key_R: keybd_buff[2] &= 0xF7; break;
-               case Qt::Key_T: keybd_buff[2] &= 0xEF; break;
-               case Qt::Key_A: keybd_buff[1] &= 0xFE; break;
-               case Qt::Key_S: keybd_buff[1] &= 0xFD; break;
-                case Qt::Key_D: keybd_buff[1] &= 0xFB; break;
-                case Qt::Key_F: keybd_buff[1] &= 0xF7; break;
-               case Qt::Key_G: keybd_buff[1] &= 0xEF; break;
-               case Qt::Key_CapsLock:
-                     keybd_buff[0] &= 0xFE; /* CAPS SHIFT */
-                    break;
-               case Qt::Key_Control:
-               case Qt::Key_Shift:
-                     keybd_buff[7] &= 0xFD; /* SYMBOL SHIFT */
-                 break;
-                case Qt::Key_Z: keybd_buff[0] &= 0xFD; break;
-               case Qt::Key_X: keybd_buff[0] &= 0xFB; break;
-               case Qt::Key_C: keybd_buff[0] &= 0xF7; break;
-               case Qt::Key_division:
-                               keybd_buff[7] &= 0xFD; break;
-               case Qt::Key_V: keybd_buff[0] &= 0xEF; break;
-               case Qt::Key_0: keybd_buff[4] &= 0xFE; break;
-               case Qt::Key_9: keybd_buff[4] &= 0xFD; break;
-               case Qt::Key_8: keybd_buff[4] &= 0xFB; break;
-                case Qt::Key_7: keybd_buff[4] &= 0xF7; break;
-               case Qt::Key_6: keybd_buff[4] &= 0xEF; break;
-               case Qt::Key_P: keybd_buff[5] &= 0xFE; break;
-                case Qt::Key_O: keybd_buff[5] &= 0xFD; break;
-               case Qt::Key_I: keybd_buff[5] &= 0xFB; break;
-               case Qt::Key_U: keybd_buff[5] &= 0xF7; break;
-               case Qt::Key_Y: keybd_buff[5] &= 0xEF; break;
-                case Qt::Key_Return: keybd_buff[6] &= 0xFE; break;
-                case Qt::Key_L: keybd_buff[6] &= 0xFD; break;
-                //case VK_ADD:
-                //     keybd_buff[7] &= 0xFD;
-                case Qt::Key_K: keybd_buff[6] &= 0xFB; break;
-               //case VK_SUBTRACT:
-               //        keybd_buff[7] &= 0xFD;
-               case Qt::Key_J: keybd_buff[6] &= 0xF7; break;
-               case Qt::Key_H: keybd_buff[6] &= 0xEF; break;
-       
-               case Qt::Key_Escape:
-                     keybd_buff[0] &= 0xFE; /* CAPS SHIFT */
-                     /* Fall-through */
-               case Qt::Key_Space:      keybd_buff[7] &= 0xFE; break;
-                case Qt::Key_M: keybd_buff[7] &= 0xFB; break;
-               case Qt::Key_N: keybd_buff[7] &= 0xF7; break;
-                //case VK_MULTIPLY:
-                //     keybd_buff[7] &= 0xFD;
-               case Qt::Key_B: keybd_buff[7] &= 0xEF; break;
-                case Qt::Key_Tab:
-                 keybd_buff[0] &= 0xFE;
-                 keybd_buff[7] &= 0xFD;
-                 break;
-       
-                case Qt::Key_Backspace: keybd_buff[0] &= 0xFE; /* CAPS SHIFT */
-                     keybd_buff[4] &= 0xFE;
-                     break;
-       
-               /* kempston joystick */
-               case Qt::Key_Left:  joystick &= ~2; break;
-               case Qt::Key_Right: joystick &= ~1; break;
-               case Qt::Key_Up:    joystick &= ~8; break;
-               case Qt::Key_Down:  joystick &= ~4; break;
-               case Qt::Key_Alt:   joystick &= ~16; break;
-       
-                /* Sinclair joystick */
-               //case VK_NUMPAD5:
-               //case VK_NUMPAD0: keybd_buff[0] &= 0xFE;
-               //          keybd_buff[4] &= 0xFE; /* 0 - fire  */
-               //         break;
-               // case VK_NUMPAD4: keybd_buff[0] &= 0xFE;
-               //          keybd_buff[3] &= 0xEF; /* 5 - left  */
-               //          break;
-               //case VK_NUMPAD6: keybd_buff[0] &= 0xFE;
-               //          keybd_buff[4] &= 0xFB; /* 8 - right */
-               //          break;
-               //case VK_NUMPAD8: keybd_buff[0] &= 0xFE;
-               //         keybd_buff[4] &= 0xF7; /* 7 - up    */
-               //         break;
-               //case VK_NUMPAD2: keybd_buff[0] &= 0xFE;
-               //         keybd_buff[4] &= 0xEF; /* 6 - down  */
-               //         break;
-       
-                //case VK_F1:
-                //     PostMessage(hwnd, WM_COMMAND, IDM_HELP, 0L);
-                //     break;
-       
-                /* shortcut key for saveas and load a' la Z80 */
-       
-               //case VK_F2:
-               //      PostMessage(hwnd, WM_COMMAND, IDM_SAVEAS, 0L);
-               //        break;
-               case Qt::Key_F2:
-                   {
-                   static int n = 0;
-                   char s[200];
-                       
-                   sprintf(s, "/tmp/w%04d.z80", n++);
-                   save_sna(s);
-                   }
-                   break;
+    case Qt::Key_1: keybd_buff[3] &= 0xFE; break;
+    case Qt::Key_2: keybd_buff[3] &= 0xFD; break;
+    case Qt::Key_3: keybd_buff[3] &= 0xFB; break;
+    case Qt::Key_4: keybd_buff[3] &= 0xF7; break;
+    case Qt::Key_5: keybd_buff[3] &= 0xEF; break;
+    case Qt::Key_Q: keybd_buff[2] &= 0xFE; break;
+    case Qt::Key_W: keybd_buff[2] &= 0xFD; break;
+    case Qt::Key_E: keybd_buff[2] &= 0xFB; break;
+    case Qt::Key_R: keybd_buff[2] &= 0xF7; break;
+    case Qt::Key_T: keybd_buff[2] &= 0xEF; break;
+    case Qt::Key_A: keybd_buff[1] &= 0xFE; break;
+    case Qt::Key_S: keybd_buff[1] &= 0xFD; break;
+    case Qt::Key_D: keybd_buff[1] &= 0xFB; break;
+    case Qt::Key_F: keybd_buff[1] &= 0xF7; break;
+    case Qt::Key_G: keybd_buff[1] &= 0xEF; break;
+    case Qt::Key_CapsLock:
+        keybd_buff[0] &= 0xFE; /* CAPS SHIFT */
+        break;
+    case Qt::Key_Control:
+    case Qt::Key_Shift:
+        keybd_buff[7] &= 0xFD; /* SYMBOL SHIFT */
+        break;
+    case Qt::Key_Z: keybd_buff[0] &= 0xFD; break;
+    case Qt::Key_X: keybd_buff[0] &= 0xFB; break;
+    case Qt::Key_C: keybd_buff[0] &= 0xF7; break;
+    case Qt::Key_division:
+        keybd_buff[7] &= 0xFD; break;
+    case Qt::Key_V: keybd_buff[0] &= 0xEF; break;
+    case Qt::Key_0: keybd_buff[4] &= 0xFE; break;
+    case Qt::Key_9: keybd_buff[4] &= 0xFD; break;
+    case Qt::Key_8: keybd_buff[4] &= 0xFB; break;
+    case Qt::Key_7: keybd_buff[4] &= 0xF7; break;
+    case Qt::Key_6: keybd_buff[4] &= 0xEF; break;
+    case Qt::Key_P: keybd_buff[5] &= 0xFE; break;
+    case Qt::Key_O: keybd_buff[5] &= 0xFD; break;
+    case Qt::Key_I: keybd_buff[5] &= 0xFB; break;
+    case Qt::Key_U: keybd_buff[5] &= 0xF7; break;
+    case Qt::Key_Y: keybd_buff[5] &= 0xEF; break;
+    case Qt::Key_Return: keybd_buff[6] &= 0xFE; break;
+    case Qt::Key_L: keybd_buff[6] &= 0xFD; break;
+    //case VK_ADD:
+    //     keybd_buff[7] &= 0xFD;
+    case Qt::Key_K: keybd_buff[6] &= 0xFB; break;
+    //case VK_SUBTRACT:
+    //        keybd_buff[7] &= 0xFD;
+    case Qt::Key_J: keybd_buff[6] &= 0xF7; break;
+    case Qt::Key_H: keybd_buff[6] &= 0xEF; break;
 
-               case Qt::Key_F5:
-                   {
-                   static int n = 0;
-                   char s[200];
+    case Qt::Key_Escape:
+        keybd_buff[0] &= 0xFE; /* CAPS SHIFT */
+        /* Fall-through */
+    case Qt::Key_Space:      keybd_buff[7] &= 0xFE; break;
+    case Qt::Key_M: keybd_buff[7] &= 0xFB; break;
+    case Qt::Key_N: keybd_buff[7] &= 0xF7; break;
+    //case VK_MULTIPLY:
+    //     keybd_buff[7] &= 0xFD;
+    case Qt::Key_B: keybd_buff[7] &= 0xEF; break;
+    case Qt::Key_Tab:
+        keybd_buff[0] &= 0xFE;
+        keybd_buff[7] &= 0xFD;
+        break;
 
-                   sprintf(s, "/tmp/w%04d.tap", n++);
-                   save_sna(s);
-                   }
-                   break;
-       
-               //case VK_F3:
-               //        PostMessage(hwnd, WM_COMMAND, IDM_OPEN, 0L);
-               //      break;
-       
-               /* for PAUSE */
-               //case VK_F4:
-               //      PostMessage(hwnd, WM_COMMAND, IDM_PAUSE, 0L);
-               //      break;
-       
-               /* for RESET */
-               //case VK_F5:
-               //      PostMessage(hwnd, WM_COMMAND, IDM_RESET, 0L);
-               //      break;
+    case Qt::Key_Backspace: keybd_buff[0] &= 0xFE; /* CAPS SHIFT */
+    keybd_buff[4] &= 0xFE;
+    break;
+
+    /* kempston joystick */
+    case Qt::Key_Left:  joystick &= ~2; break;
+    case Qt::Key_Right: joystick &= ~1; break;
+    case Qt::Key_Up:    joystick &= ~8; break;
+    case Qt::Key_Down:  joystick &= ~4; break;
+    case Qt::Key_Alt:   joystick &= ~16; break;
+
+    /* Sinclair joystick */
+    //case VK_NUMPAD5:
+    //case VK_NUMPAD0: keybd_buff[0] &= 0xFE;
+    //          keybd_buff[4] &= 0xFE; /* 0 - fire  */
+    //         break;
+    // case VK_NUMPAD4: keybd_buff[0] &= 0xFE;
+    //          keybd_buff[3] &= 0xEF; /* 5 - left  */
+    //          break;
+    //case VK_NUMPAD6: keybd_buff[0] &= 0xFE;
+    //          keybd_buff[4] &= 0xFB; /* 8 - right */
+    //          break;
+    //case VK_NUMPAD8: keybd_buff[0] &= 0xFE;
+    //         keybd_buff[4] &= 0xF7; /* 7 - up    */
+    //         break;
+    //case VK_NUMPAD2: keybd_buff[0] &= 0xFE;
+    //         keybd_buff[4] &= 0xEF; /* 6 - down  */
+    //         break;
+
+    //case VK_F1:
+    //     PostMessage(hwnd, WM_COMMAND, IDM_HELP, 0L);
+    //     break;
+
+    /* shortcut key for saveas and load a' la Z80 */
+
+    //case VK_F2:
+    //      PostMessage(hwnd, WM_COMMAND, IDM_SAVEAS, 0L);
+    //        break;
+    case Qt::Key_F2:
+        {
+            static int n = 0;
+            char s[200];
+
+            sprintf(s, "/tmp/w%04d.z80", n++);
+            save_sna(s);
+        }
+        break;
+
+    case Qt::Key_F5:
+        {
+            static int n = 0;
+            char s[200];
+
+            sprintf(s, "/tmp/w%04d.tap", n++);
+            save_sna(s);
+        }
+        break;
+
+        //case VK_F3:
+        //        PostMessage(hwnd, WM_COMMAND, IDM_OPEN, 0L);
+        //      break;
+
+        /* for PAUSE */
+        //case VK_F4:
+        //      PostMessage(hwnd, WM_COMMAND, IDM_PAUSE, 0L);
+        //      break;
+
+        /* for RESET */
+        //case VK_F5:
+        //      PostMessage(hwnd, WM_COMMAND, IDM_RESET, 0L);
+        //      break;
 
     }
 }
 
-void DrawnWindow::dragEnterEvent(QDragEnterEvent *e)
+void SpectrumWidget::dragEnterEvent(QDragEnterEvent *e)
 {
     if (e->mimeData()->hasUrls()) {
         e->acceptProposedAction();
     }
 }
 
-void DrawnWindow::dragMoveEvent(QDragMoveEvent *e)
+void SpectrumWidget::dragMoveEvent(QDragMoveEvent *e)
 {
     e->acceptProposedAction();
 }
 
-void DrawnWindow::dropEvent(QDropEvent *e)
+void SpectrumWidget::dropEvent(QDropEvent *e)
 {
    // check for our needed mime type, here a file or a list of files
    if (e->mimeData()->hasUrls())
@@ -440,31 +440,24 @@ void DrawnWindow::dropEvent(QDropEvent *e)
 
 }
 
-void DrawnWindow::contextMenuEvent(QContextMenuEvent *event)
+void SpectrumWidget::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu menu(this);
-    QAction *conn = new QAction("Connect SD card", &menu);
-    QAction *disconn = new QAction("Disconnect SD card", &menu);
     QAction *nmi = new QAction("Trigger NMI", &menu);
-    connect( conn, &QAction::triggered, this, &DrawnWindow::connectSD);
-    connect( disconn, &QAction::triggered, this, &DrawnWindow::disconnectSD);
-    connect( nmi, &QAction::triggered, this, &DrawnWindow::triggerNMI);
-    menu.addAction( conn );
-    menu.addAction( disconn );
+    //connect( conn, &QAction::triggered, this, &SpectrumWidget::connectSD);
+    //connect( disconn, &QAction::triggered, this, &SpectrumWidget::disconnectSD);
+    connect( nmi, &QAction::triggered, this, &SpectrumWidget::triggerNMI);
+    //menu.addAction( conn );
+    //menu.addAction( disconn );
     menu.addAction( nmi );
     menu.exec(event->globalPos());
 }
 
-void DrawnWindow::connectSD()
-{
-    emit sdConnected();
-}
-
-void DrawnWindow::disconnectSD()
-{
-    emit sdDisconnected();
-}
-void DrawnWindow::triggerNMI()
+void SpectrumWidget::triggerNMI()
 {
     emit NMI();
+}
+
+EmulatorWindow::EmulatorWindow(QWidget *parent): QMainWindow(parent)
+{
 }

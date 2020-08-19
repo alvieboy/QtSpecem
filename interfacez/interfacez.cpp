@@ -8,6 +8,7 @@
 #include <QByteArray>
 #include "sna_relocs.h"
 #include "SnaFile.h"
+#include <QPushButton>
 
 /* FPGA IO ports */
 
@@ -37,14 +38,13 @@
 
 static QList<unsigned long long> audio_event_queue;
 
-static void log_audio(unsigned long long);
-static void log_init(const char *filename);
+InterfaceZ *InterfaceZ::self = NULL;
 
 extern "C" {
 #include "z80core/iglobal.h"
 #include "z80core/z80.h"
     static volatile int nmi_pending = 0;
-    static volatile const uint8_t *nmi_rom = NULL;
+    //static volatile const uint8_t *nmi_rom = NULL;
     void save_sna(const char * file_name);
     extern void open_sna(const char*);
     extern uint16_t read_DE();
@@ -57,9 +57,10 @@ extern "C" {
             nmi_pending=0;
             //open_sna("input.sna");
             do_nmi_int();
-            if (nmi_rom) {
+            if (1) {
                 // test
-                set_current_rom((const unsigned char*)nmi_rom);
+                qDebug()<<"Enabling external ROM";
+                set_enable_external_rom(1);
             }
         }
         execute();
@@ -69,21 +70,32 @@ extern "C" {
     {
         // Upon retn, restore ROM.
         printf("RETN called, restoring stock ROM\n");
-        set_current_rom(NULL);
-
-       // save_sna("snadump.sna");
+        set_enable_external_rom(0);
+       //  save_sna("snadump.sna");
     }
-    void trigger_nmi(const uint8_t *rom)
+
+    void trigger_nmi()
     {
-        nmi_rom = rom;
+       // nmi_rom = rom;
         nmi_pending = 1;
     }
+
     void reset_spectrum() {
-        set_current_rom(NULL);
+        set_enable_external_rom(0);
         do_reset();
     }
 
     extern void toggle_audio();
+
+    extern UCHAR external_rom_read(USHORT address)
+    {
+        return InterfaceZ::get()->romread(address);
+    }
+    extern void external_rom_write(USHORT address, UCHAR value)
+    {
+        InterfaceZ::get()->romwrite(address, value);
+    }
+
 
     void insn_executed(unsigned long long ticks) {
         //printf("%lld\n", ticks);
@@ -110,7 +122,7 @@ extern "C" {
         startpos += delta;
         //printf("Pulse %u\n", delta);
         audio_event_queue.push_back( startpos );
-        log_audio(startpos);
+        //log_audio(startpos);
     }
 
     void audio_pause(unsigned long delta)
@@ -155,12 +167,12 @@ void InterfaceZ::hdlc_flusher(void *userdata)
 }
 
 
-UCHAR interfacez__ioread(void*user,UCHAR address)
+UCHAR interfacez__ioread(void*user,USHORT address)
 {
     return static_cast<InterfaceZ*>(user)->ioread(address);
 }
 
-void interfacez__iowrite(void*user,UCHAR address, UCHAR value)
+void interfacez__iowrite(void*user,USHORT address, UCHAR value)
 {
     static_cast<InterfaceZ*>(user)->iowrite(address, value);
 }
@@ -178,12 +190,16 @@ InterfaceZ::InterfaceZ()
 
 int InterfaceZ::init()
 {
-    int r  = register_expansion_port(0x01,
-                                     0x01,
+    int r  = register_expansion_port(0x0001,
+                                     0x0001,
                                      &interfacez__ioread,
                                      &interfacez__iowrite,
                                      this
                                     );
+    if (r<0)
+        return -1;
+
+   
     m_fpgasocket = new QTcpServer();
 
     connect(m_fpgasocket, &QTcpServer::newConnection, this, &InterfaceZ::newConnection);
@@ -194,7 +210,9 @@ int InterfaceZ::init()
     }
 
     m_sna_rom_size = -1;
-
+    m_rom = 0;
+    m_ram = 0;
+    m_gpiostate = 0xFFFFFFFFFFFFFFFF;
     return r;
 }
 
@@ -237,12 +255,15 @@ void InterfaceZ::socketError(InterfaceZ::Client *c, QAbstractSocket::SocketError
     delete(c);
 }
 
-UCHAR InterfaceZ::ioread(UCHAR address)
+UCHAR InterfaceZ::ioread(USHORT address)
 {
     uint8_t val = 0xff;
 
-
-    switch (address) {
+    //if ((address & 0x8003)==0x8001) {
+    //    return 0x00;
+    //}
+    //printf("IO read %04x\n", address);
+    switch (address & 0xFF) {
     case 0x05:
         val = 0x39; //Bg
         break;
@@ -273,7 +294,7 @@ UCHAR InterfaceZ::ioread(UCHAR address)
         break;
 
     case FPGA_PORT_RAM_DATA:
-        printf("return RAM[0x%06x] = 0x%02x\n", extramptr, extram[extramptr]);
+        //printf("return RAM[0x%06x] = 0x%02x\n", extramptr, extram[extramptr]);
         val = extram[extramptr++];
         break;
 
@@ -282,14 +303,36 @@ UCHAR InterfaceZ::ioread(UCHAR address)
         break;
     }
 
+//    printf("port read %04x = %02x\n", address, val);
+
     return val;
 }
 
 
 
-void InterfaceZ::iowrite(UCHAR address, UCHAR value)
+void InterfaceZ::iowrite(USHORT address, UCHAR value)
 {
-    switch (address) {
+
+
+    //if ((address & 0x8003)==0x8001) {
+//    printf("port write %04x = %02x\n", address, value);
+    //   return;
+    //}
+
+   
+
+    switch (address & 0xFF) {
+    case FPGA_PORT_SCRATCH0:
+        if (value=='\n') {
+            printf("DEBUG: %s\n", m_debug.toLatin1().constData());
+            m_debug.clear();
+        } else {
+            m_debug.append(char(value));
+        }
+        break;
+
+
+
     case FPGA_PORT_CMD_FIFO_DATA: // Cmd fifo
         printf("CMD FIFO write: 0x%04x 0x%02x\n", address, value);
         if (m_cmdfifo.size()<32) {
@@ -321,13 +364,14 @@ void InterfaceZ::iowrite(UCHAR address, UCHAR value)
         break;
 
     case FPGA_PORT_RAM_DATA:
-        printf("RAM[0x%06x] = 0x%02x\n", extramptr, value);
+        //printf("RAM[0x%06x] = 0x%02x\n", extramptr, value);
         extram[extramptr++] = value;
         if (extramptr>=sizeof(extram)) {
             extramptr=0;
         }
         break;
-
+    default:
+        printf("Unknown IO port accessed: %04x\n", address);
     }
 }
 
@@ -387,12 +431,14 @@ void InterfaceZ::loadCustomROM(const char *name)
         file.close();
         p=data;
         for (int i=0; i < 16384 ; i++)
-            *(customrom+i) = *(p++);
+            *(extram+i) = *(p++);
     } else {
         printf("Erorr loading custom ROM from %s\n", name);
 
         return;
     }
+
+    set_enable_external_rom(1);
 
     customromloaded = true;
 }
@@ -402,7 +448,7 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
     uint8_t cmd = data[0];
     uint8_t *txbuf_complete = (uint8_t*)malloc(datalen);
 
-    //printf("CMD: 0x%02x len %d\n", cmd, datalen);
+    printf("CMD: 0x%02x len %d\n", cmd, datalen);
 
     data++;
     datalen--;
@@ -426,9 +472,6 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
     case FPGA_CMD_READ_USB:
         break;
     case FPGA_CMD_WRITE_USB:
-        break;
-    case FPGA_CMD_WRITE_ROM:
-        fpgaWriteROM(data, datalen, txbuf);
         break;
     case FPGA_CMD_WRITE_RES_FIFO:
         fpgaWriteResFifo(data,datalen,txbuf);
@@ -497,7 +540,7 @@ void InterfaceZ::fpgaReadStatus(const uint8_t *data, int datalen, uint8_t *txbuf
 {
     Q_UNUSED(data);
 
-    if (datalen<1)
+    if (datalen<2)
         throw DataShortException();
 
     uint8_t status = 0;
@@ -520,20 +563,7 @@ void InterfaceZ::fpgaReadStatus(const uint8_t *data, int datalen, uint8_t *txbuf
     }
 
 
-    txbuf[0] = status;
-}
-
-void InterfaceZ::fpgaWriteROM(const uint8_t *data, int datalen, uint8_t *txbuf)
-{
-    Q_UNUSED(txbuf);
-    // Extract offset
-    uint16_t offset;
-    data = extractbe16(data,datalen,offset);
-
-    printf("ROM: chunk %d offset 0x%04x\n", datalen, offset);
-    memcpy(&customrom[offset], data, datalen);
-    customromloaded = true;
-
+    txbuf[1] = status;
 }
 
 void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
@@ -545,6 +575,8 @@ void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
 
     uint16_t old_flags = fpga_flags;
 
+    printf("Set Flags %02x %02x %02x\n", data[0], data[1], data[2]);
+
     fpga_flags = ((uint16_t)data[0]) | (data[2]<<8);
 
     if ( (old_flags & FPGA_FLAG_RSTSPECT)
@@ -552,8 +584,8 @@ void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
         reset_spectrum();
     }
 
-
     // Triggers
+    printf("Triggers: %02x\n", data[1]);
     
     if (data[1] & FPGA_FLAG_TRIG_RESOURCEFIFO_RESET) {
     }
@@ -569,7 +601,7 @@ void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
         m_cmdfifo.clear();
     }
     if (data[1] & FPGA_FLAG_TRIG_FORCENMI_ON) {
-        trigger_nmi(customromloaded? customrom:NULL);
+        trigger_nmi();
     }
     if (data[1] & FPGA_FLAG_TRIG_FORCENMI_OFF) {
     }
@@ -584,7 +616,10 @@ void InterfaceZ::fpgaReadExtRam(const uint8_t *data, int datalen, uint8_t *txbuf
         printf("Attempt to read outside extram, offset 0x%08x len %d\n", offset, datalen);
         return;
     }
-    memcpy( &txbuf[3], &extram[offset], datalen);
+
+
+    // Skip one byte.
+    memcpy( &txbuf[4], &extram[offset], datalen);
 }
 
 void InterfaceZ::fpgaWriteExtRam(const uint8_t *data, int datalen, uint8_t *txbuf)
@@ -597,6 +632,15 @@ void InterfaceZ::fpgaWriteExtRam(const uint8_t *data, int datalen, uint8_t *txbu
         printf("Attempt to read outside extram, offset 0x%08x len %d\n", offset, datalen);
         return;
     }
+
+    do {
+        printf("Data mem write %08x: [", offset);
+
+        for (int i=0;i<datalen;i++) {
+            printf(" %02x", data[3+i]);
+        }
+        printf(" ]\n");
+    } while (0);
 
     memcpy( &extram[offset], data, datalen);
 
@@ -684,17 +728,17 @@ void InterfaceZ::fpgaGetRegs32(const uint8_t *data, int datalen, uint8_t *txbuf)
 void InterfaceZ::fpgaReadCmdFifo(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
     Q_UNUSED(data);
-    if (datalen<2)
+    if (datalen<3)
         throw DataShortException();
 
     bool empty = m_cmdfifo.empty();
     if (empty) {
-        txbuf[0] = 0xFF;
+        txbuf[1] = 0xFF;
     } else {
-        txbuf[0] = 0x00;
+        txbuf[1] = 0x00;
         uint8_t v = m_cmdfifo.front();
         printf("Read CMD fifo: %02x\n", v);
-        txbuf[1] = v;
+        txbuf[2] = v;
         m_cmdfifo.pop_front();
     }
 }
@@ -717,218 +761,107 @@ void InterfaceZ::cmdFifoWriteEvent()
 }
 
 
+#define MEMLAYOUT_ROM0_BASEADDRESS (0x000000)
+#define MEMLAYOUT_ROM0_SIZE        (0x002000)
+#define MEMLAYOUT_ROM1_BASEADDRESS (0x002000)
+#define MEMLAYOUT_ROM1_SIZE        (0x002000)
+#define MEMLAYOUT_ROM2_BASEADDRESS (0x004000)
+#define MEMLAYOUT_ROM2_SIZE        (0x004000)
 
-void TapePlayer::handleStreamData(uint16_t data)
-{
-    if (data & 0x100) {
-        handleCommand(data & 0xff);
-    } else {
-        handleData(data & 0xff);
-    }
-}
+#define MEMLAYOUT_RAM_BASEADDRESS(x) (0x010000 + ((x)+0x2000))
+#define MEMLAYOUT_RAM_SIZE(x) (0x1FFF)
 
-void TapePlayer::sendPilot()
-{
-    unsigned i;
-    for (i=0;i<pilot_header_len*2;i++) {
-        audio_push(pilot_len);
-    }
-}
 
-void TapePlayer::sendSync()
-{
-    audio_push(sync0_len);
-    audio_push(sync1_len);
-}
+#define NMI_ROM_BASEADDRESS MEMLAYOUT_ROM0_BASEADDRESS
+#define NMI_ROM_SIZE MEMLAYOUT_ROM0_SIZE
 
-void TapePlayer::gotType(uint8_t data)
+UCHAR InterfaceZ::romread(USHORT address)
 {
-    type = data;
-    blocklen--;
-    if (!playing) {
-        playing = true;
-        audio_start();
-        log_init("audio.vcd");
-    }
-    if (standard) {
-        sendPilot();
-        sendSync();
-    }
-    if (blocklen>1)
-        sendByte(type);
-    else
-        sendByte(type, lastbytelen);
-
-    printf("TAP: play chunk size %d\n", blocklen);
-}
-void TapePlayer::handleData(uint8_t data)
-{
-    switch (state) {
-    case TAP_IDLE:
-        if (!len_external) {
-            blocklen = data;
-            printf("Block len0: [ %02x ]\n", data);
-            state = TAP_BLOCKLEN;
+    uint8_t value = 0;
+    switch (m_rom) {
+    case 0:
+        if (address<0x2000) {
+            value = extram[MEMLAYOUT_ROM0_BASEADDRESS+address];
         } else {
-            gotType(data);
-            state = TAP_PLAY;
+            value = extram[MEMLAYOUT_RAM_BASEADDRESS(m_ram)+address];
+         //   printf("ROM READ %04x: %02x\n", address, value);
         }
         break;
-    case TAP_BLOCKLEN:
-        blocklen += ((uint32_t)data)<<8;
-        printf("Block len1: [ %04x ]\n", blocklen);
-        state = TAP_TYPE;
-        break;
-
-    case TAP_TYPE:
-        gotType(data);
-        state = TAP_PLAY;
-        break;
-
-    case TAP_PLAY:
-        blocklen--;
-        if (blocklen==0) {
-            //printf("Data byte: [ %02x ] (%d)\n", data, lastbytelen);
-            sendByte(data, lastbytelen);
-            //if (standard) {
-            //    gap( 10 );
-            //} else {
-                gap ( gap_len );
-            //}
-            state = TAP_IDLE;
+    case 1:
+        if (address<0x2000) {
+            value = extram[MEMLAYOUT_ROM1_BASEADDRESS+address];
         } else {
-            //printf("Data byte: [ %02x ]\n", data);
-            sendByte(data);
+            value = extram[MEMLAYOUT_RAM_BASEADDRESS(m_ram)+address];
+         //   printf("ROM READ %04x: %02x\n", address, value);
         }
+        break;
+    case 2:
+        value = extram[MEMLAYOUT_ROM2_BASEADDRESS+address];
+        break;
+    default:
         break;
     }
+    return value;
 }
 
-#define CMDDEBUG(x...) do { printf("DBG: "); printf(x); printf("\n"); } while (0);
-
-void TapePlayer::handleCommand(uint8_t data)
+void InterfaceZ::romwrite(USHORT address, UCHAR value)
 {
-    uint16_t val16;
-    switch (state) {
-    case TAP_IDLE:
-
-        if (!(data & 0x80)) {
-            dptr = 0;
-            cmd = data & 0x7F;
-            //CMDDEBUG("%02x: Need argument", data);
-            state = TAP_CMDDATA;
-        } else {
-            // Single byte command
-            switch (data) {
-            case 0x80:
-                CMDDEBUG("Resetting values");
-                reset();
-                break;
-            case 0x82:
-                CMDDEBUG("Setting LEN to external");
-                len_external=true;
-                break;
-            case 0x83:
-                CMDDEBUG("Setting LEN to internal");
-                len_external=false;
-                break;
-            case 0x84:
-                CMDDEBUG("Setting PURE");
-                standard=false;
-                break;
-            case 0x85:
-                CMDDEBUG("Setting STANDARD");
-                standard=true;
-                break;
-            }
-        }
+    //printf("ROM WRITE %04x: %02x\n", address, value);
+    switch (m_rom) {
+    case 0: /* Fall-through */
+    case 1:
+        extram[MEMLAYOUT_RAM_BASEADDRESS(m_ram)+address] = value;
         break;
-    case TAP_CMDDATA:
-        dbuf[dptr++] = data;
-        if (dptr==2) {
-            val16 = ((uint16_t)dbuf[0]) + (uint16_t(dbuf[1])<<8);
-            switch (cmd) {
-            case 0x00: pilot_len = val16; break;
-            case 0x01: sync0_len = val16; break;
-            case 0x02: sync1_len = val16; break;
-            case 0x03: logic0_len = val16; break;
-            case 0x04: logic1_len = val16; break;
-            case 0x08: pilot_header_len = val16; break;
-            case 0x09: pilot_data_len = val16; break;
-            case 0x0A: gap_len = val16; break;
-            case 0x0B: blocklen = val16; break;
-            case 0x0C: blocklen += ((uint32_t)val16&0xff)<<16;
-                       lastbytelen = 8-((val16>>8) & 0x7);
-                       break;
-            case 0x0e: repeat = val16; break;
-            case 0x0d: {
-                // Play pulse data.
-                CMDDEBUG("Pulse %d (repeat %d)", val16, repeat);
-                unsigned i;
-                for (i=0; i<=repeat;i++) {
-                    audio_push(val16);
-                }
-            }
-            break;
-
-            default:
-                break;
-            }
-            dptr = 0;
-            state = TAP_IDLE;
-
-        }
     default:
         break;
     }
 }
 
-void TapePlayer::sendBit(uint8_t value)
+void InterfaceZ::sendGPIOupdate()
 {
-    if (value) {
-        audio_push(logic1_len);
-        audio_push(logic1_len);
-    } else {
-        audio_push(logic0_len);
-        audio_push(logic0_len);
+    for (auto c: m_clients) {
+        c->sendGPIOupdate(m_gpiostate);
     }
+
 }
 
-void TapePlayer::gap(uint32_t val_ms)
+void InterfaceZ::Client::sendGPIOupdate(uint64_t v)
 {
-    printf("GAP %d ms (%ld ticks)", val_ms, (unsigned long)val_ms * 3500UL);
-    audio_pause( val_ms * 3500 );
-}
-
-void TapePlayer::sendByte(uint8_t value, uint8_t bytelen)
-{
-    while (bytelen--) {
-        sendBit(value & 0x80);
-        value<<=1;
+    qDebug()<<"Sending update GPIO";
+    hdlc_encoder__begin(&m_hdlc_encoder);
+    uint8_t cmd[9]= { 0x02,
+    (uint8_t)((v>>56)&0xff),
+    (uint8_t)((v>>48)&0xff),
+    (uint8_t)((v>>40)&0xff),
+    (uint8_t)((v>>32)&0xff),
+    (uint8_t)((v>>24)&0xff),
+    (uint8_t)((v>>16)&0xff),
+    (uint8_t)((v>>8)&0xff),
+    (uint8_t)((v>>0)&0xff),
+    };
+    {
+        unsigned int i;
+        for (i=0;i<sizeof(cmd);i++) {
+            printf("0x%02x ", cmd[i]);
+        }
+        printf("\n");
     }
+    hdlc_encoder__write(&m_hdlc_encoder, &cmd, sizeof(cmd));
+    hdlc_encoder__end(&m_hdlc_encoder);
 }
 
-void TapePlayer::reset()
+void InterfaceZ::linkGPIO(QPushButton *button, uint32_t gpionum)
 {
-    pilot_len = DEFAULT_PILOT;
-    sync0_len = DEFAULT_SYNC0;
-    sync1_len = DEFAULT_SYNC1;
-    logic0_len = DEFAULT_LOGIC0;
-    logic1_len = DEFAULT_LOGIC1;
-    gap_len = DEFAULT_GAP;
-    pilot_header_len = DEFAULT_PILOT_HEADER_LEN;
-    pilot_data_len = DEFAULT_PILOT_HEADER_LEN;
-    len_external = false;
-    standard = true;
-    lastbytelen = 8;
-};
-
-TapePlayer::TapePlayer()
-{
-    reset();
-    state = TAP_IDLE;
-    playing = false;
+    connect(button, &QPushButton::pressed, this, [this,gpionum](){ m_gpiostate &= ~(1ULL<<gpionum);
+            qDebug()<<"Clear"<<gpionum;
+            sendGPIOupdate(); } );
+    connect(button, &QPushButton::released, this, [this,gpionum](){ m_gpiostate |= (1ULL<<gpionum);
+            qDebug()<<"Set"<<gpionum;
+            sendGPIOupdate(); } );
 }
+
+
+
 
 static FILE *vcdfile = NULL;
 
@@ -944,7 +877,7 @@ void log_audio(unsigned long long tick)
     }
 }
 
-static void log_init(const char *filename)
+void log_init(const char *filename)
 {
     vcdfile = fopen(filename,"w");
     if (vcdfile!=NULL) {
@@ -964,40 +897,4 @@ static void log_init(const char *filename)
     }
 }
 
-/*
- 13 00 00 00 73 6b 6f 6f 6c 64 61 7a 65 20 1b 00 0a 00 1b 00 44
 
- 1d 00 ff 00
- 0a 05 00 ef 22 22 af 0d 00 14 0e 00 f9 c0 32 33 32 39 36 0e 00 00 00 5b 00 0d fa 13 00 00 03 73 6b 6f 6f 
-
-/*
- 13 00 00 00 73 6b 6f 6f 6c 64 61 7a 65 20 1b 00 0a 00 1b 00 44 1d 00 ff 00
-
- 0a 05 00 ef 22 22 af  |....D........"".|
-00000020  0d 00 14 0e 00 f9 c0 32  33 32 39 36 0e 00 00 00  |.......23296....|
-00000030  5b 00 0d fa 13 00 00 03  73 6b 6f 6f 6c 64 61 7a  |[.......skooldaz|
-00000040  65 20 12 1b 00 40 00 00  04 14 1b ff ff ff ff ff  |e ...@..........|
-00000050  ff ff ff ff ff fe 0f ff  ff f1 ff ff e0 00 78 ff  |..............x.|
-00000060  ff 82 00 0f 00 1f f8 00  f0 fd 55 55 ff ff ff ff  |..........UU....|
-00000070  ff ff ff ff fa 0f ff ff  ff f8 ff d5 f0 00 7f f8  |................|
-00000080  03 f0 00 06 00 fe 07 07  c0 85 55 55 ff ff ff ff  |..........UU....|
-00000090  ff ff ff f4 0f ff ff ff  ff fe 7f d5 78 00 7f f8  |............x...|
-000000a0  05 10 00 1a e0 01 c2 ff  c0 85 55 55 ff ff ff ff  |..........UU....|
-000000b0  ff ff e8 0f ff ff ff ff  ff ff 3f f5 7c 00 7f ff  |..........?.|...|
-000000c0  ea aa bb aa ae 00 7f ff  c0 85 55 55 ff ff ff ff  |..........UU....|
-000000d0  ff d0 0f ff ff ff ff ff  ff ff 8f f5 5f 00 7f ff  |............_...|
-000000e0  ea aa ae ae ae b0 1f ff  00 85 55 55 ff ff ff ff  |..........UU....|
-000000f0  a0 0f ff fc ff ff ff ff  ff ff c7 fd 5f 00 3f ff  |............_.?.|
-00000100  fa aa af ea ab fe ff e0  00 85 55 55 ff ff fe 40  |..........UU...@|
-00000110  0f ff ff ff 3f ff ff e1  e6 7f e3 fd 57 ff ff ff  |....?.......W...|
-00000120  fe aa af ea ab fb ff ff  ff 85 55 55 ff fc 40 0f  |..........UU..@.|
-00000130  ff ff f9 fb c0 ff ff 79  e3 bf f9 ff 57 c0 03 ff  |.......y....W...|
-00000140  fe aa af ea ab ff f8 00  00 85 55 55 ff ff ff ff  |..........UU....|
-00000150  ff ff ff ff ff f4 1f ff  ff f1 ff aa e0 00 78 ff  |..............x.|
-00000160  ff fd 00 07 00 0f f8 00  f0 86 aa aa ff ff ff ff  |................|
-00000170  ff ff ff ff f4 1f ff ff  ff f8 ff aa f0 00 7f f0  |................|
-00000180  00 d0 00 0f 00 f8 03 07  c0 86 aa aa ff ff ff ff  |................|
-00000190  ff ff ff e8 1f ff ff ff  ff fe 7f ea fc 00 7f fc  |................|
-000001a0  0f 78 00 3f e0 00 e3 ff  c0 86 aa aa ff ff ff ff  |.x.?............|
-000001b0  ff ff d0 1f ff ff ff ff  ff ff 3f ea be 00 7f ff  |..........?.....|
-*/

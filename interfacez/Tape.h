@@ -1,6 +1,8 @@
 #ifndef __TAPE_H__
 #define __TAPE_H__
 
+#include <inttypes.h>
+
 enum tapstate {
     TAP_IDLE,
     TAP_CMDDATA,
@@ -33,6 +35,8 @@ protected:
     void gap(uint32_t val_ms);
     void sendByte(uint8_t value, uint8_t count = 8);
     void sendBit(uint8_t value);
+    void push(unsigned delta);
+
 private:
     uint16_t pilot_len;
     uint16_t sync0_len;

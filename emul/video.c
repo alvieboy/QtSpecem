@@ -31,7 +31,7 @@ void writebyte(unsigned short adress, unsigned char byte)
    /* if ROM defined can't write in lower adresses
     */
    if(adress < 0x4000)
-      return; 
+      return writeROM(adress, byte); 
    /*
    if ( (adress > readword(0x8002)) && (adress < (readword(0x8002)+793)))
    {

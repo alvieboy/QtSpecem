@@ -14,7 +14,7 @@
 #include "Tape.h"
 
 class QTcpSocket;
-
+class QPushButton;
 
 
 /* FPGA commands */
@@ -54,6 +54,7 @@ public:
         Client(InterfaceZ*me): intf(me) {
         }
         void gpioEvent(uint8_t);
+        void sendGPIOupdate(uint64_t);
         QTcpSocket *s;
         InterfaceZ *intf;
         uint8_t m_hdlcrxbuf[8192];
@@ -63,11 +64,24 @@ public:
     };
 
 
-
+private:
     InterfaceZ();
+public:
+    // Singleton
+    static InterfaceZ *get() {
+        if (self==NULL) {
+            self = new InterfaceZ();
+        }
+        return self;
+    }
+    static InterfaceZ *self;
+
     int init();
-    UCHAR ioread(UCHAR address);
-    void iowrite(UCHAR address, UCHAR value);
+    UCHAR ioread(USHORT address);
+    void iowrite(USHORT address, UCHAR value);
+    UCHAR romread(USHORT address);
+    void romwrite(USHORT address, UCHAR value);
+
     void loadCustomROM(const char *file);
 
     static void hdlcDataReady(void *user, const uint8_t *data, unsigned len);
@@ -88,10 +102,10 @@ public:
     //void WiFiScanFinished();
     //void WiFiConnected();
     void onNMI();
+    void linkGPIO(QPushButton *button, uint32_t gpionum);
 protected:
     void fpgaCommandReadID(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf);
-    void fpgaWriteROM(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaReadStatus(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaReadExtRam(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaWriteExtRam(const uint8_t *data, int datalen, uint8_t *txbuf);
@@ -147,17 +161,20 @@ protected:
         target = *source++;
         return source;
     }
+    void sendGPIOupdate();
 signals:
     void tapDataReady();
 
 private:
+    uint8_t m_rom;
+    uint8_t m_ram;
+    uint64_t m_gpiostate;
     TapePlayer m_player;
     QTcpServer *m_fpgasocket;
-    uint8_t customrom[16384];
     bool customromloaded;
-    uint8_t saverom[16384];
+//    uint8_t saverom[16384];
 
-    uint8_t extram[65536*2]; // Only 2 blocks for now.
+    uint8_t extram[65536*8]; // Only 8 blocks for now.
     uint32_t extramptr;
 
     uint32_t regs[32];
@@ -179,6 +196,7 @@ private:
 
     QList<Client*> m_clients;
     uint16_t fpga_flags;
+    QString m_debug;
 };
 
 #endif

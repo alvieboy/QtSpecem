@@ -5,17 +5,17 @@
 #define MAX_EXPANDERS 8
 
 struct ioexpand {
-    UCHAR port;
-    UCHAR mask;
-    UCHAR (*readfn)(void*,UCHAR port);
-    void (*writefn)(void*,UCHAR port, UCHAR val);
+    USHORT port;
+    USHORT mask;
+    UCHAR (*readfn)(void*,USHORT port);
+    void (*writefn)(void*,USHORT port, UCHAR val);
     void *userdata;
 };
 
 struct ioexpand expanders[MAX_EXPANDERS];
 static unsigned num_expanders = 0;
 
-int readport_expansion(UCHAR port, UCHAR *value)
+int readport_expansion(USHORT port, UCHAR *value)
 {
     unsigned i;
     int r = -1;
@@ -31,7 +31,7 @@ int readport_expansion(UCHAR port, UCHAR *value)
     return r;
 }
 
-int writeport_expansion(UCHAR port, UCHAR value)
+int writeport_expansion(USHORT port, UCHAR value)
 {
     unsigned i;
     int r = -1;
@@ -49,9 +49,9 @@ int writeport_expansion(UCHAR port, UCHAR value)
     return r;
 }
 
-int register_expansion_port(UCHAR port, UCHAR mask,
-                            UCHAR (*readfn)(void*,UCHAR port),
-                            void (*writefn)(void*,UCHAR port, UCHAR val),
+int register_expansion_port(USHORT port, USHORT mask,
+                            UCHAR (*readfn)(void*,USHORT port),
+                            void (*writefn)(void*,USHORT port, UCHAR val),
                             void *userdata)
 {
     if (num_expanders+1 == MAX_EXPANDERS)
@@ -67,12 +67,14 @@ int register_expansion_port(UCHAR port, UCHAR mask,
 
 
 extern UCHAR *mem;
-static const UCHAR *current_rom = NULL;
+static int external_rom_enabled = 0;
 
-void set_current_rom(const UCHAR *address)
+void set_enable_external_rom(int enabled)
 {
-    current_rom = address;
+    external_rom_enabled = enabled;
 }
+extern UCHAR external_rom_read(USHORT address);
+extern void external_rom_write(USHORT address, UCHAR value);
 
 void __attribute__((weak)) rom_access_hook(USHORT address __attribute__((unused)),
                                            UCHAR val __attribute__((unused)))
@@ -82,11 +84,10 @@ void __attribute__((weak)) rom_access_hook(USHORT address __attribute__((unused)
 UCHAR readROM(USHORT addr)
 {
     UCHAR val;
-    if (!current_rom)
+    if (!external_rom_enabled)
         val =  mem[addr];
     else {
-        //printf("ROM %04x %02x\n", addr, current_rom[addr]);
-        val = current_rom[addr];
+        val = external_rom_read(addr);
     }
     rom_access_hook(addr,val);
     return val;
@@ -97,4 +98,11 @@ UCHAR readRAM(USHORT addr)
     if (addr<0x4000)
         return readROM(addr);
     return mem[addr];
+}
+
+void writeROM(USHORT addr, UCHAR value)
+{
+    if (!external_rom_enabled)
+        return;
+    external_rom_write(addr,value);
 }
