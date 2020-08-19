@@ -55,7 +55,7 @@ public:
         }
         void gpioEvent(uint8_t);
         void sendGPIOupdate(uint64_t);
-        QTcpSocket *s;
+        QAbstractSocket *s;
         InterfaceZ *intf;
         uint8_t m_hdlcrxbuf[8192];
         hdlc_decoder_t m_hdlc_decoder;
@@ -91,6 +91,8 @@ public:
     void hdlc_writer(const uint8_t c);
     static void hdlc_flusher(void *userdata);
     void hdlc_flusher(void);
+    void setCommsSocket(int socket);
+    void addConnection(QAbstractSocket *s);
 
 
     public slots:

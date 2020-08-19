@@ -219,7 +219,11 @@ int InterfaceZ::init()
 void InterfaceZ::newConnection()
 {
     QTcpSocket *s = m_fpgasocket->nextPendingConnection();
+    addConnection(s);
+}
 
+void InterfaceZ::addConnection(QAbstractSocket *s)
+{
     s->setSocketOption(QAbstractSocket::LowDelayOption, 1);
 
     Client *c = new Client(this);
@@ -239,6 +243,10 @@ void InterfaceZ::newConnection()
                        &InterfaceZ::hdlcDataReady,
                        c);
     m_clients.push_back(c);
+}
+
+void InterfaceZ::setCommsSocket(int sock)
+{
 }
 
 
