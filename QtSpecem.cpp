@@ -173,6 +173,7 @@ int lParam;
 
 void EmulatorWindow::keyPressEvent(QKeyEvent *event)
 {
+    bool handled = true;
     switch (event->key() )
     {
     case Qt::Key_1:      keybd_buff[3] |= ~0xFE; break;
@@ -266,11 +267,18 @@ void EmulatorWindow::keyPressEvent(QKeyEvent *event)
     //case VK_NUMPAD2: keybd_buff[0] |= ~0xFE;
     //         keybd_buff[4] |= ~0xEF; /* 6 - down  */
     //         break;
+    default:
+        handled = false;
+        break;
     }
+    if (handled)
+        event->setAccepted(true);
 }
 
 void EmulatorWindow::keyReleaseEvent(QKeyEvent *event)
 {
+    bool handled = true;
+
     switch (event->key() )
     {
     case Qt::Key_1: keybd_buff[3] &= 0xFE; break;
@@ -406,8 +414,12 @@ void EmulatorWindow::keyReleaseEvent(QKeyEvent *event)
         //case VK_F5:
         //      PostMessage(hwnd, WM_COMMAND, IDM_RESET, 0L);
         //      break;
-
+    default:
+        handled = false;
+        break;
     }
+    if (handled)
+        event->setAccepted(true);
 }
 
 void SpectrumWidget::dragEnterEvent(QDragEnterEvent *e)
