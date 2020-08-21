@@ -28,6 +28,9 @@ int main(int argc, char **argv)
     //DrawnWindow draw;
     SpectrumWidget *spectrumWidget = new SpectrumWidget();
 
+    KeyCapturer *key= new KeyCapturer();
+    app.installEventFilter(key);
+
     QMainWindow *mainw = new EmulatorWindow();
 
     //spectrumWidget->installEventFilter(mainw);

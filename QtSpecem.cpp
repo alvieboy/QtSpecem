@@ -171,7 +171,7 @@ void SpectrumWidget::paintEvent(QPaintEvent *) {
 
 int lParam;
 
-void EmulatorWindow::keyPressEvent(QKeyEvent *event)
+bool KeyCapturer::keyPressEvent(QKeyEvent *event)
 {
     bool handled = true;
     switch (event->key() )
@@ -271,11 +271,10 @@ void EmulatorWindow::keyPressEvent(QKeyEvent *event)
         handled = false;
         break;
     }
-    if (handled)
-        event->setAccepted(true);
+    return handled;
 }
 
-void EmulatorWindow::keyReleaseEvent(QKeyEvent *event)
+bool KeyCapturer::keyReleaseEvent(QKeyEvent *event)
 {
     bool handled = true;
 
@@ -418,8 +417,25 @@ void EmulatorWindow::keyReleaseEvent(QKeyEvent *event)
         handled = false;
         break;
     }
-    if (handled)
-        event->setAccepted(true);
+    return handled;
+}
+
+bool KeyCapturer::eventFilter(QObject *obj, QEvent *event)
+{
+    QKeyEvent *k = dynamic_cast<QKeyEvent*>(event);
+
+    if (k) {
+        switch (k->type()) {
+        case QEvent::KeyPress:
+            return keyPressEvent(k);
+        case QEvent::KeyRelease:
+            return keyReleaseEvent(k);
+        default:
+            break;
+        }
+    }
+
+    return false;
 }
 
 void SpectrumWidget::dragEnterEvent(QDragEnterEvent *e)

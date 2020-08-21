@@ -16,9 +16,20 @@ Q_OBJECT
     EmulatorWindow(QWidget *parent = 0);
 
 protected:
-    void keyPressEvent(QKeyEvent *) override;
-    void keyReleaseEvent(QKeyEvent *) override;
-
+    //void keyPressEvent(QKeyEvent *) override;
+    //void keyReleaseEvent(QKeyEvent *) override;
 };
+
+
+class KeyCapturer: public QObject
+{
+public:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+protected:
+    bool keyPressEvent(QKeyEvent *) ;
+    bool keyReleaseEvent(QKeyEvent *) ;
+};
+
+
 #endif
 
