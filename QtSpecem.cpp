@@ -56,6 +56,16 @@ extern "C" void init_pallete(void) {
     }
 }
 
+extern "C" void init_pallete_reversed(void) {
+    int i;
+    QRgb value;
+    
+    for (i = 0 ; i < 16 ; i++) {
+        value = qRgb(rgbvals[i][2], rgbvals[i][1], rgbvals[i][0]);
+        background.setColor(i, value);
+    }
+}
+
 extern "C" void pixel_host(unsigned short x, unsigned short  y, unsigned char colour) {
     background.setPixel(x + BORDER_HORIZONTAL, y+BORDER_VERTICAL, colour);
 }

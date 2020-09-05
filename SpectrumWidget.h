@@ -32,8 +32,8 @@ protected:
 signals:
     void NMI();
 private:
-    Qt::AspectRatioMode aspect =Qt::IgnoreAspectRatio;
-    Qt::TransformationMode transform = Qt::SmoothTransformation;
+    Qt::AspectRatioMode aspect;// =Qt::IgnoreAspectRatio;
+    Qt::TransformationMode transform;// = Qt::SmoothTransformation;
     QTimer *timer;
 };
 
