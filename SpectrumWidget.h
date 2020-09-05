@@ -15,6 +15,12 @@ public:
     SpectrumWidget(QWidget *parent = 0);
     void paintEvent(QPaintEvent *) override;
     void KeyPress(QMainWindow *parent = 0);
+    void setAspectRatio(Qt::AspectRatioMode newmode) { aspect=newmode; }
+    void setTransformationMode(Qt::TransformationMode newmode) { transform=newmode; }
+
+    void stopEmul();
+    void resumeEmul();
+    void loadSNA(const char *filename);
 protected:
     void drawBorder();
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -26,6 +32,8 @@ protected:
 signals:
     void NMI();
 private:
+    Qt::AspectRatioMode aspect =Qt::IgnoreAspectRatio;
+    Qt::TransformationMode transform = Qt::SmoothTransformation;
     QTimer *timer;
 };
 
