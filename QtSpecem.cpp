@@ -127,6 +127,8 @@ SpectrumWidget::SpectrumWidget(QWidget *parent) : QWidget(parent) {
 
     memset(border_colors,0x7, sizeof(border_colors));
     timer = new QTimer(this);
+    connect(timer, SIGNAL(timeout()), this, SLOT(repaint()));
+
     resumeEmul();
     setAcceptDrops(true);
     border_ptr = 0;
@@ -139,7 +141,6 @@ void SpectrumWidget::stopEmul()
 
 void SpectrumWidget::resumeEmul()
 {
-    connect(timer, SIGNAL(timeout()), this, SLOT(repaint()));
     timer->start(20); //
 }
 
