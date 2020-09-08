@@ -514,6 +514,6 @@ void SpectrumWidget::triggerNMI()
     emit NMI();
 }
 
-EmulatorWindow::EmulatorWindow(QWidget *parent): QMainWindow(parent)
+EmulatorWindow::EmulatorWindow(QWidget *parent, Qt::WindowFlags flags): QMainWindow(parent, flags)
 {
 }

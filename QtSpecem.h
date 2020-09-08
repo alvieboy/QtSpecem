@@ -13,7 +13,7 @@
 class EmulatorWindow: public QMainWindow {
 Q_OBJECT
     public:
-    EmulatorWindow(QWidget *parent = 0);
+    EmulatorWindow(QWidget *parent = 0, Qt::WindowFlags flags = Qt::WindowFlags());
 
 protected:
     //void keyPressEvent(QKeyEvent *) override;
