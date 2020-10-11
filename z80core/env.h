@@ -88,6 +88,7 @@ extern USHORT parity_table[256];
 UCHAR readROM(USHORT addr);
 UCHAR readRAM(USHORT addr);
 void writeROM(USHORT addr, UCHAR value);
+void writeRAM(USHORT addr, UCHAR value);
 
 unsigned long long get_clock_ticks_since_startup();
 unsigned long get_clock_ticks();

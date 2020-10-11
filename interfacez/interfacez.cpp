@@ -310,6 +310,17 @@ UCHAR InterfaceZ::ioread(USHORT address)
         val = extram[extramptr++];
         break;
 
+    case FPGA_PORT_RAM_ADDR_0:
+        val = extramptr & 0xFF;
+        break;
+
+    case FPGA_PORT_RAM_ADDR_1:
+        val = (extramptr>>8) & 0xFF;
+        break;
+
+    case FPGA_PORT_RAM_ADDR_2:
+        val = (extramptr>>16) & 0xFF;
+        break;
     case 0x1F: // Joy port
         val = 0x00;
         break;
@@ -327,7 +338,7 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
 
 
     //if ((address & 0x8003)==0x8001) {
-//    printf("port write %04x = %02x\n", address, value);
+    //printf("port write %04x = %02x\n", address, value);
     //   return;
     //}
 
@@ -346,7 +357,7 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
 
 
     case FPGA_PORT_CMD_FIFO_DATA: // Cmd fifo
-        printf("CMD FIFO write: 0x%04x 0x%02x\n", address, value);
+        //printf("CMD FIFO write: 0x%04x 0x%02x\n", address, value);
         if (m_cmdfifo.size()<32) {
             m_cmdfifo.push_back(value);
             cmdFifoWriteEvent();
@@ -356,23 +367,24 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
         // Address LSB
         extramptr &= 0xFFFF00;
         extramptr |= value;
+        //printf("EXT ram pointer (0): %06x\n", extramptr);
         break;
 
     case FPGA_PORT_RAM_ADDR_1:
         // Address hSB
         extramptr &= 0xFF00FF;
         extramptr |= ((uint32_t)value)<<8;
-        printf("EXT ram pointer: %06x\n", extramptr);
+        //printf("EXT ram pointer (1): %06x\n", extramptr);
         break;
 
     case FPGA_PORT_RAM_ADDR_2:
         // Address MSB
         extramptr &= 0x00FFFF;
-        // We only use 1 banks.
-        value &= 0x1;
+        // We only use 2 banks.
+        value &= 0x3;
 
         extramptr |= ((uint32_t)value)<<16;
-        printf("EXT ram pointer: %06x\n", extramptr);
+        //printf("EXT ram pointer (2): %06x (%02x)\n", extramptr, value);
         break;
 
     case FPGA_PORT_RAM_DATA:
@@ -458,9 +470,10 @@ void InterfaceZ::loadCustomROM(const char *name)
 void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
 {
     uint8_t cmd = data[0];
-    uint8_t *txbuf_complete = (uint8_t*)malloc(datalen);
+    uint8_t *txbuf_complete = (uint8_t*)malloc(datalen+ 8);
+    txbuf_complete[0] = cmd;
 
-    printf("CMD: 0x%02x len %d\n", cmd, datalen);
+    //printf("CMD: 0x%02x len %d\n", cmd, datalen);
 
     data++;
     datalen--;
@@ -587,7 +600,7 @@ void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
 
     uint16_t old_flags = fpga_flags;
 
-    printf("Set Flags %02x %02x %02x\n", data[0], data[1], data[2]);
+    //printf("Set Flags %02x %02x %02x\n", data[0], data[1], data[2]);
 
     fpga_flags = ((uint16_t)data[0]) | (data[2]<<8);
 
@@ -597,7 +610,7 @@ void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
     }
 
     // Triggers
-    printf("Triggers: %02x\n", data[1]);
+    //printf("Triggers: %02x\n", data[1]);
     
     if (data[1] & FPGA_FLAG_TRIG_RESOURCEFIFO_RESET) {
     }
@@ -644,7 +657,7 @@ void InterfaceZ::fpgaWriteExtRam(const uint8_t *data, int datalen, uint8_t *txbu
         printf("Attempt to read outside extram, offset 0x%08x len %d\n", offset, datalen);
         return;
     }
-
+#if 0
     do {
         printf("Data mem write %08x: [", offset);
 
@@ -653,7 +666,7 @@ void InterfaceZ::fpgaWriteExtRam(const uint8_t *data, int datalen, uint8_t *txbu
         }
         printf(" ]\n");
     } while (0);
-
+#endif
     memcpy( &extram[offset], data, datalen);
 
 }
@@ -749,7 +762,7 @@ void InterfaceZ::fpgaReadCmdFifo(const uint8_t *data, int datalen, uint8_t *txbu
     } else {
         txbuf[1] = 0x00;
         uint8_t v = m_cmdfifo.front();
-        printf("Read CMD fifo: %02x\n", v);
+      //  printf("Read CMD fifo: %02x\n", v);
         txbuf[2] = v;
         m_cmdfifo.pop_front();
     }

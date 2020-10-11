@@ -43,7 +43,8 @@ void writebyte(unsigned short adress, unsigned char byte)
    }
    */
 
-   *(mem + adress) = byte;
+   writeRAM(adress, byte);
+//   *(mem + adress) = byte;
 
    // if ( adress == 0x8786 )
    //   TraceOn = 3;

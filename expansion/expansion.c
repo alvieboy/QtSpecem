@@ -106,3 +106,10 @@ void writeROM(USHORT addr, UCHAR value)
         return;
     external_rom_write(addr,value);
 }
+
+extern unsigned short get_pc();
+
+void writeRAM(USHORT addr, UCHAR value)
+{
+    mem[addr] = value;
+}

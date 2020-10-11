@@ -12,7 +12,7 @@
 
 void save_sna(const char * file_name);
 void insn_executed(unsigned long long clock);
-
+unsigned short get_pc() { return PC; }
 /* Increment the lower 7 bits of R in each M1 cycle
 */
 #define inc_R() (R++)
