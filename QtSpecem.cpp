@@ -18,7 +18,7 @@ extern "C" int open_sna(const char * file_name);
 extern "C" void save_sna(const char * file_name);
 
 #define BORDER_HORIZONTAL 32
-#define BORDER_VERTICAL 16
+#define BORDER_VERTICAL 32
 
 #define BORDER_THRESHOLD_LOW 4096              /* Border scan start in T-states */
 #define BORDER_THRESHOLD_HIGH 4096+(65535)     /* Border scan end in T-states */
@@ -52,6 +52,16 @@ extern "C" void init_pallete(void) {
     
     for (i = 0 ; i < 16 ; i++) {
         value = qRgb(rgbvals[i][0], rgbvals[i][1], rgbvals[i][2]);
+        background.setColor(i, value);
+    }
+}
+
+extern "C" void init_pallete_reversed(void) {
+    int i;
+    QRgb value;
+    
+    for (i = 0 ; i < 16 ; i++) {
+        value = qRgb(rgbvals[i][2], rgbvals[i][1], rgbvals[i][0]);
         background.setColor(i, value);
     }
 }
@@ -112,14 +122,32 @@ SpectrumWidget::SpectrumWidget(QWidget *parent) : QWidget(parent) {
     setMinimumSize(((256+(BORDER_HORIZONTAL*2))*2),
                 (192+(BORDER_VERTICAL*2))*2);
 
+    aspect = Qt::IgnoreAspectRatio;
+    transform = Qt::FastTransformation;
+
     memset(border_colors,0x7, sizeof(border_colors));
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(repaint()));
-    timer->start(20); //
+
+    resumeEmul();
     setAcceptDrops(true);
     border_ptr = 0;
 }
 
+void SpectrumWidget::stopEmul()
+{
+    timer->stop();
+}
+
+void SpectrumWidget::resumeEmul()
+{
+    timer->start(20); //
+}
+
+void SpectrumWidget::loadSNA(const char *file)
+{
+    open_sna(file);
+}
 void SpectrumWidget::drawBorder()
 {
     // Top border
@@ -161,7 +189,7 @@ void SpectrumWidget::drawBorder()
 void SpectrumWidget::paintEvent(QPaintEvent *) {
     QPainter paint(this);
     drawBorder();
-    paint.drawImage(0, 0, background.scaled(size()));
+    paint.drawImage(0, 0, background.scaled(size(), aspect, transform));
     execute_if_running();
     complete_border();
 
@@ -486,6 +514,6 @@ void SpectrumWidget::triggerNMI()
     emit NMI();
 }
 
-EmulatorWindow::EmulatorWindow(QWidget *parent): QMainWindow(parent)
+EmulatorWindow::EmulatorWindow(QWidget *parent, Qt::WindowFlags flags): QMainWindow(parent, flags)
 {
 }

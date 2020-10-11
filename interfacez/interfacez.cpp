@@ -617,8 +617,10 @@ void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
     if (data[1] & FPGA_FLAG_TRIG_FORCEROMONRETN) {
     }
     if (data[1] & FPGA_FLAG_TRIG_FORCEROMCS_ON) {
+        set_enable_external_rom(1);
     }
     if (data[1] & FPGA_FLAG_TRIG_FORCEROMCS_OFF) {
+        set_enable_external_rom(0);
     }
     if (data[1] & FPGA_FLAG_TRIG_INTACK) {
     }
