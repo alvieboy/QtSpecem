@@ -97,47 +97,63 @@ static inline unsigned getpage(unsigned short address)
     return page;
 }
 
-static UCHAR readmem(USHORT address)
-{
-    if (address<0x4000)
-        return readrom(address);
-
-    unsigned page = getpage(address);
-    unsigned memoffset = (unsigned)(address & 0x3FFF) + (page<<14);
-    return memory[memoffset];
-}
-
-
-static void writemem(unsigned short address, unsigned char byte)
-{
-    unsigned page = getpage(address);
-    unsigned memoffset = (unsigned)(address & 0x3FFF) + ((unsigned)page<<14);
-    //printf("%04x %02x\n", memoffset,byte);
-    memory[memoffset] = byte;
-    if (address >= 0x4000 && address <= 0x8000) {
-        video_writebyte(address, byte);
-    }
-}
-
 void writerom(unsigned short address, unsigned char byte)
 {
     unsigned real_addr = (address & 0x3FFF)+rom_offset;
-//    printf("WROM %04x %02x\n", real_addr,byte);
     rommemory[real_addr] = byte;
 }
 
 void writerom_indexed(unsigned romno, unsigned short address, unsigned char byte)
 {
     unsigned real_addr = (address & 0x3FFF)+(romno*0x4000);
-//    printf("WROM %04x %02x\n", real_addr,byte);
     rommemory[(address & 0x3FFF)+(romno*0x4000)] = byte;
 }
 
-unsigned char readrom(unsigned short address)
+/*
+ Read ROM address, from a CPU perspective.
+ This function is marked as weak so it can be overriden
+ by ROM extensions.
+ */
+
+UCHAR __attribute__((weak)) cpu_readrom(USHORT address)
 {
     unsigned real_addr = (address & 0x3FFF)+rom_offset;
-//    printf("RROM %04x %02x\n", real_addr,rommemory[real_addr]);
     return rommemory[real_addr];
+}
+
+/*
+ Write ROM address, from a CPU perspective.
+ This function is marked as weak so it can be overriden
+ by ROM extensions.
+ */
+void cpu_writerom(USHORT address, UCHAR byte)
+{
+    /* Nothing */
+}
+
+
+/*
+ Read RAM address, from a CPU perspective.
+ */
+UCHAR cpu_readmem(USHORT address)
+{
+    unsigned page = getpage(address);
+    unsigned memoffset = (unsigned)(address & 0x3FFF) + (page<<14);
+    return memory[memoffset];
+}
+
+/*
+ Write RAM address, from a CPU perspective.
+ */
+void cpu_writemem(USHORT address, UCHAR byte)
+{
+    unsigned page = getpage(address);
+    unsigned memoffset = (unsigned)(address & 0x3FFF) + ((unsigned)page<<14);
+    memory[memoffset] = byte;
+    // TODO: check if alternate screen is in use
+    if (address >= 0x4000 && address <= 0x8000) {
+        video_writebyte(address, byte);
+    }
 }
 
 /*=========================================================================*
@@ -156,14 +172,12 @@ void writebyte_page(UCHAR page, USHORT offset, UCHAR value)
     }
 }
 
-
 void writebyte_direct(unsigned offset, UCHAR value)
 {
     memory[offset] = value;
     if (offset >= 0x4000 && offset < 0x8000)  {
         video_writebyte(offset, value);
     }
-
 }
 
 unsigned getpageaddress(UCHAR page)
@@ -173,18 +187,17 @@ unsigned getpageaddress(UCHAR page)
     return page_real;
 }
 
-
 /*=========================================================================*
  *                            writebyte                                    *
  *=========================================================================*/
 
 void writebyte(USHORT addr, UCHAR value)
 {
-   if(addr < 0x4000)
-      return; /* ROM writes not supported */
-
-   writemem(addr, value);
-//   video_writebyte(addr, value);
+    if(addr < 0x4000) {
+        cpu_writerom(addr,value);
+        return;
+    }
+    cpu_writemem(addr, value);
 }
 
 /*=========================================================================*
@@ -193,8 +206,8 @@ void writebyte(USHORT addr, UCHAR value)
 void writeword(USHORT addr, USHORT value)
 {
     /* Remember: Z80 word is in reversed order */
-        writebyte(addr, (UCHAR) (value & 0xff) );
-writebyte(addr + 1, (UCHAR) ( (value >> 8) & 0xff) );
+    writebyte(addr, (UCHAR) (value & 0xff) );
+    writebyte(addr + 1, (UCHAR) ( (value >> 8) & 0xff) );
 }
 
 #undef readbyte
@@ -204,10 +217,9 @@ writebyte(addr + 1, (UCHAR) ( (value >> 8) & 0xff) );
  *=========================================================================*/
 UCHAR readbyte(USHORT addr)
 {
-    /* definide as a macro at z80.h */
     if (addr<0x4000)
-        return readrom(addr);
-    return readmem(addr);
+        return cpu_readrom(addr);
+    return cpu_readmem(addr);
 }
 
 #undef readword
@@ -217,9 +229,9 @@ UCHAR readbyte(USHORT addr)
  *=========================================================================*/
 USHORT readword(USHORT addr)
 {
-    /* Remember: Z80 word is in reversed order */
-    return( (USHORT) readmem(addr)  |
-           ( ( (USHORT) readmem(addr+1) ) << 8 ) );
+    /* Remember: Z80 word is little-endian */
+    return( (USHORT) cpu_readmem(addr)  |
+           ( ( (USHORT) cpu_readmem(addr+1) ) << 8 ) );
 }
 
 
