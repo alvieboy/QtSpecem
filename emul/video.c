@@ -18,36 +18,14 @@ static char attrib_z80[24][32];
 
 //  Write a byte on Spectrum memory, at the attribute cache,
 // and at the WinG buffer if needed
-void writebyte(unsigned short adress, unsigned char byte)
+void video_writebyte(unsigned short adress, unsigned char byte)
 {
    unsigned char i;
    UCHAR x, y;      /* coordenadas */
    static unsigned char colour = 0;  /* ultimo atributo   */
    static unsigned char ink = 0;     /* ink   (com flash) */
    static unsigned char paper = 0;   /* paper (com flash) */
-
-   /* each memory acess = 3T */
-
-   /* if ROM defined can't write in lower adresses
-    */
-   if(adress < 0x4000)
-      return; 
-   /*
-   if ( (adress > readword(0x8002)) && (adress < (readword(0x8002)+793)))
-   {
-      FILE * out;
-
-      out = fopen("/tmp/out", "a");
-      fprintf(out, "%04X\n", PC );
-      fclose(out);
-   }
-   */
-
-   *(mem + adress) = byte;
-
-   // if ( adress == 0xFDBB )
-   //   TraceOn = 3;
-
+
    if(adress < 0x5800) /* If adress lower than attributes adress */
    {
       static USHORT ladress = 0x4000;

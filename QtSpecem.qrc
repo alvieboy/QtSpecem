@@ -1,5 +1,7 @@
 <!DOCTYPE RCC><RCC version="1.0">
 <qresource>
       <file>rom/spectrum.rom</file>
+      <file>rom/128-0.rom</file>
+      <file>rom/128-1.rom</file>
 </qresource>
 </RCC>

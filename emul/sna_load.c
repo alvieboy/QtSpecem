@@ -25,13 +25,11 @@
 //#include <dir.h>
 #include "../h/env.h"
 #include "../h/snap.h"
+#include "../h/mem.h"
 
 // as defined in WSpecem.c
 // A handle that identifies the main window
 // extern HWND      hwndApp;
-
-// String with location of our ROM file
-extern char      szROMPath[260];
 
 // extern HWND hwndKeyboard;
 extern void save_sna(const char * file_name);
@@ -187,7 +185,9 @@ int open_sna(const char * file_name)
 
       inside_level_trap = 1;
       last_was_ach++;
-      open_sna((char *)szROMPath);
+      //open_sna((char *)szROMPath);
+      // TBD: reload ROMS
+
       inside_level_trap = inside_copy;
       last_was_ach = 0;
    }
@@ -274,7 +274,7 @@ int open_sna(const char * file_name)
 	    break;
 
 	 case ROM_FMT:
-	    strcpy(szROMPath, snapcopy);
+	    //strcpy(szROMPath, snapcopy);
 	    status = rom_load(stream);
 	    // LIXO
 	    //if(reset)
@@ -623,7 +623,7 @@ static int sp_load(FILE * hfp)
    return 0;
 }
 
-static int z80_decompress(USHORT address, USHORT len, FILE * hfp)
+static int z80_decompress(unsigned address, USHORT len, FILE * hfp)
 {
    UCHAR byte;
    USHORT i;
@@ -645,16 +645,16 @@ static int z80_decompress(USHORT address, USHORT len, FILE * hfp)
 	    byte=getbyte(hfp);
 	    len--;
 	    while(i--)
-	       writebyte(address++, byte);
+	       writebyte_direct(address++, byte);
 	 }
 	 else
 	 {
-	    writebyte(address++, 0xed);
-	    writebyte(address++, byte);
+	    writebyte_direct(address++, 0xed);
+	    writebyte_direct(address++, byte);
 	 }
       }
       else
-	 writebyte(address++, byte);
+	 writebyte_direct(address++, byte);
    }
    return 0;
 }
@@ -715,35 +715,26 @@ static int z80_load(FILE * hfp)
 	 if(feof_file(hfp) || (len == 0))
 	    break;
 	 /* get 16k-page number */
-	 byte=getbyte(hfp);
-	 switch(byte)
-	 {
-	    case 4: address = (USHORT)0x8000;
-		break;
-	    case 5: address = (USHORT)0xC000;
-		break;
-	    case 8: address = (USHORT)0x4000;
-		break;
-	    default:
-		/* hardware not implemented ... skiping page....
-		 if it's a program wich only uses the 128k chip sound,
-		 it'll work... and then, maybe not ; but it's worth a
-		 try
-		 */
-		page_skipped = 1;
-		z_seek(hfp, (long)len);
-		continue;
-	 }
+         byte=getbyte(hfp);
+         if (byte < 3 || byte > 10) {
+             /* hardware not implemented ... skiping page....
+              */
+             page_skipped = 1;
+             z_seek(hfp, (long)len);
+             continue;
+         }
+         byte-=3; // Convert into 128K page address.
+
 	 if(len == (USHORT)0xFFFF)
 	    {
-	    short i;
+	    unsigned short i;
 
 	    // code to read v3.05 .Z80 files
 	    for(i = 0; i < 16384; i++)
-	       writebyte(address++, getbyte(hfp) );
+	       writebyte_page(byte, i, getbyte(hfp) );
 	    }
 	 else
-	    z80_decompress(address, len, hfp);
+	    z80_decompress(getpageaddress(byte), len, hfp);
       }
    }
    else
@@ -1036,27 +1027,27 @@ void patch_rom(int do_it)
 	 /* jumps to relevant routine */
 
          /* patches for LD-BYTES */
-	 *(mem+0x056C) = 0xC3;   /* jp */
-         *(mem+0x056D) = 0x9f;
-	 *(mem+0x056E) = 0x05;
+	 writerom(0x056C, 0xC3);   /* jp */
+         writerom(0x056D, 0x9f);
+	 writerom(0x056E, 0x05);
 
-	 *(mem+0x059E) = 0x00;  /* nop */
+	 writerom(0x059E, 0x00);  /* nop */
 
-	 *(mem+0x05c8) = 0xED;  /* install handler */
-	 *(mem+0x05c9) = 0xFB;
+	 writerom(0x05c8, 0xED);  /* install handler */
+	 writerom(0x05c9, 0xFB);
       }
    }
    else
    {
       // unpatch ROM
-      *(mem+0x056C) = v056c;
-      *(mem+0x056D) = v056d;
-      *(mem+0x056E) = v056e;
+      writerom(0x056C,v056c);
+      writerom(0x056D,v056d);
+      writerom(0x056E,v056e);
 
-      *(mem+0x059E) = v059e;
+      writerom(0x059E,v059e);
 
-      *(mem+0x05C8) = v05c8;
-      *(mem+0x05C9) = v05c9;
+      writerom(0x05C8, v05c8);
+      writerom(0x05C9, v05c9);
    }
 }
 
@@ -1069,7 +1060,7 @@ static int rom_load(FILE * hfp)
    {
       if(feof_file(hfp))
          break;
-      *(mem+i) = getbyte(hfp);
+      writerom(i, getbyte(hfp));
    }
    //patch_rom(1);
    return ((i == 0x4000)?0:3);

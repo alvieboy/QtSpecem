@@ -50,8 +50,10 @@ struct Z80vars * Z80vars;
 /* Used in DDCB and FDCB to keep a indice for IX and IY */
 UCHAR lastbyte;
 
-/* Memory 64k */
-UCHAR * mem;
+/* Memory 128k */
+UCHAR *memory;
+UCHAR *rommemory;
+
 UCHAR * vars;
 
 /* ROM flag:
@@ -71,29 +73,35 @@ static UCHAR inited = 0;
  *=========================================================================*/
 void Init_Z80Emu(void)
 {
-	if(inited++)
-	{
-	  Warning("Z80 emulation already inited");
-	}
-	else
-        {
-	/* Alloc mem for emulation --- allways 64Kb, so do
-	 not have to test 'out-of-bounds' reading and
-	 writing memory
-	i.e. PC = unsigned short (0-65535) ;
-	*/
+    if(inited++)
+    {
+        Warning("Z80 emulation already inited");
+    }
+    else
+    {
+        /* Alloc mem for emulation --- allways 64Kb, so do
+         not have to test 'out-of-bounds' reading and
+         writing memory
+         i.e. PC = unsigned short (0-65535) ;
+         */
 
 
-	  // mem =  (UCHAR *)calloc( 65536, 1 );
-	  mem =  alloc_speccy_shared_ram();
-          vars = alloc_speccy_shared_vars();
-          Z80vars  = (struct Z80vars *)  vars;
-          Z80Regs  = (union Z80Regs *)   vars + sizeof(struct Z80vars);
-          Z80Regs2 = (union Z80Regs *)   vars + sizeof(struct Z80vars) + sizeof(union Z80Regs);
-          flags    = (struct CPU_flags *)vars + sizeof(struct Z80vars) + sizeof(union Z80Regs) + sizeof(union Z80Regs);
-          Z80IX    = (union Z80IX *)     vars + sizeof(struct Z80vars) + sizeof(union Z80Regs) + sizeof(union Z80Regs) + sizeof(struct CPU_flags);
-          Z80IY    = (union Z80IY *)     vars + sizeof(struct Z80vars) + sizeof(union Z80Regs) + sizeof(union Z80Regs) + sizeof(struct CPU_flags) + sizeof(union Z80IX);
-	}
+        memory =  alloc_speccy_shared_ram();
+
+        if (!memory)
+            return;
+
+        rommemory = &memory[ 128*1024 ]; // Place ROM at end of 128K memory blocks
+
+        vars = alloc_speccy_shared_vars();
+
+        Z80vars  = (struct Z80vars *)  vars;
+        Z80Regs  = (union Z80Regs *)   vars + sizeof(struct Z80vars);
+        Z80Regs2 = (union Z80Regs *)   vars + sizeof(struct Z80vars) + sizeof(union Z80Regs);
+        flags    = (struct CPU_flags *)vars + sizeof(struct Z80vars) + sizeof(union Z80Regs) + sizeof(union Z80Regs);
+        Z80IX    = (union Z80IX *)     vars + sizeof(struct Z80vars) + sizeof(union Z80Regs) + sizeof(union Z80Regs) + sizeof(struct CPU_flags);
+        Z80IY    = (union Z80IY *)     vars + sizeof(struct Z80vars) + sizeof(union Z80Regs) + sizeof(union Z80Regs) + sizeof(struct CPU_flags) + sizeof(union Z80IX);
+    }
 }
 
 /*=========================================================================*
@@ -104,9 +112,9 @@ void Close_Z80Emu()
    if(inited)
    {
       /* close emulation */
-      if(mem != NULL ) // free memory used
+      if(memory != NULL ) // free memory used
       {
-	 free(mem);
+	 free(memory);
       }
       inited--;
    }

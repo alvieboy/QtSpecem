@@ -5,7 +5,7 @@
 
 #include "../h/env.h"
 
-#define SHMSZ     65536
+#define SHMSZ     (128*1024) + (32*1024)
 #define SHMVARS sizeof(struct Z80vars)+(sizeof(union Z80Regs)*2)+sizeof(struct CPU_flags) \
 		+sizeof(union Z80IX)+sizeof(union Z80IY)
 
@@ -17,9 +17,9 @@ unsigned char * alloc_speccy_shared_ram(void)
 
     /*
      * We'll name our shared memory segment
-     * "5678".
+     * "5679".
      */
-    key = 5678;
+    key = 5679; /* 0x162f */
 
     /*
      * Create the segment.
@@ -71,3 +71,7 @@ unsigned char * alloc_speccy_shared_vars(void)
     return (unsigned char *)shm;
 }
 
+void release_speccy_shared_ram(unsigned char *ptr)
+{
+    shmdt(ptr);
+}

@@ -5,6 +5,9 @@
  *
  */
 
+#ifndef __ENV_H__
+#define __ENV_H__
+
 #include "z80.h"
 #include "iglobal.h"
 
@@ -53,10 +56,6 @@ extern struct CPU_flags  * flags;
  */
 extern UCHAR lastbyte;
 
-/* 64k Mem
- */
-extern UCHAR * mem;
-
 extern UCHAR * vars;
 
 /* 'flag' WriteRom :
@@ -85,7 +84,7 @@ extern USHORT parity_table[256];
 
 /*  memory adressing - readbyte()
  */
-#define readbyte(adress) (*(mem+(USHORT)(adress)))
+//#define readbyte(adress) readmem(address)
 
 /* read word pointed to PC and sum 2 to PC
  */
@@ -131,4 +130,5 @@ Z80_C =F & (UCHAR)BIT_0;
  */
 #define   parity(x) (parity_table[x])
 
+#endif
 /* EOF: Env.h */
