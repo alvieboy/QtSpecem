@@ -13,6 +13,9 @@ extern "C" void init_pallete();
 extern "C" void open_sna(const char *);
 extern "C" void patch_rom(int);
 
+static DrawnWindow *keyPress;
+static int mode128k = 0;
+
 const struct option long_options[] = {
     { "128" , no_argument, 0, 0 },
     { 0 , 0, 0, 0 },
@@ -36,10 +39,7 @@ static void loadromfile(unsigned romidx, const char *name)
     }
 }
 
-static DrawnWindow *keyPress;
-static int mode128k = 0;
-
-static void setup_window()
+static void setup_window(QApplication &app)
 {
     keyPress = new DrawnWindow();
 }
@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
     int option_index;
     int c;
 
-    setup_window();
+    setup_window(app);
     init_pallete();
     init_emul();
 
@@ -85,6 +85,8 @@ int main(int argc, char **argv) {
         open_sna(argv[optind]);
         optind++;
     }
+
+    show_window();
 
     return app.exec();
 }
