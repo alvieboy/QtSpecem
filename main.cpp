@@ -33,7 +33,7 @@ static void loadromfile(unsigned romidx, const char *name)
         file.close();
         p=data;
         for (i=0; i < 16384 ; i++)
-            writerom_indexed(romidx,i, *(p++));
+            emul_writerom_no(romidx, i, *(p++));
     } else {
         printf("Cannot open ROM file %s\n",name);
     }

@@ -366,8 +366,8 @@ static int load_raw(FILE * hfp, USHORT inic, USHORT end)
    USHORT i;
 
    for(i=inic ; i < end ; )
-      writebyte(i++, getbyte(hfp));
-   writebyte(i, getbyte(hfp));
+      emul_writebyte_raw(i++, getbyte(hfp));
+   emul_writebyte_raw(i, getbyte(hfp));
    return 0;
 }
 
@@ -645,16 +645,16 @@ static int z80_decompress(unsigned address, USHORT len, FILE * hfp)
 	    byte=getbyte(hfp);
 	    len--;
 	    while(i--)
-	       writebyte_direct(address++, byte);
+	       emul_writebyte_raw(address++, byte);
 	 }
 	 else
 	 {
-	    writebyte_direct(address++, 0xed);
-	    writebyte_direct(address++, byte);
+	    emul_writebyte_raw(address++, 0xed);
+	    emul_writebyte_raw(address++, byte);
 	 }
       }
       else
-	 writebyte_direct(address++, byte);
+	 emul_writebyte_raw(address++, byte);
    }
    return 0;
 }
@@ -731,7 +731,7 @@ static int z80_load(FILE * hfp)
 
 	    // code to read v3.05 .Z80 files
 	    for(i = 0; i < 16384; i++)
-	       writebyte_page(byte, i, getbyte(hfp) );
+	       emul_writebyte_paged(byte, i, getbyte(hfp) );
 	    }
 	 else
 	    z80_decompress(getpageaddress(byte), len, hfp);
@@ -756,16 +756,16 @@ static int z80_load(FILE * hfp)
 		  /* if i==0 file is trashed */
 		  byte=getbyte(hfp);
 		  while(i--)
-		  writebyte(address++, byte);
+		  emul_writebyte_raw(address++, byte);
 	       }
 	       else
 	       {
-		  writebyte(address++, 0xed);
-		  writebyte(address++, byte);
+		  emul_writebyte_raw(address++, 0xed);
+		  emul_writebyte_raw(address++, byte);
 	       }
 	    }
 	    else
-	       writebyte(address++, byte);
+	       emul_writebyte_raw(address++, byte);
 	 }
       }
       else
@@ -1027,27 +1027,27 @@ void patch_rom(int do_it)
 	 /* jumps to relevant routine */
 
          /* patches for LD-BYTES */
-	 writerom(0x056C, 0xC3);   /* jp */
-         writerom(0x056D, 0x9f);
-	 writerom(0x056E, 0x05);
+	 emul_writerom(0x056C, 0xC3);   /* jp */
+         emul_writerom(0x056D, 0x9f);
+	 emul_writerom(0x056E, 0x05);
 
-	 writerom(0x059E, 0x00);  /* nop */
+	 emul_writerom(0x059E, 0x00);  /* nop */
 
-	 writerom(0x05c8, 0xED);  /* install handler */
-	 writerom(0x05c9, 0xFB);
+	 emul_writerom(0x05c8, 0xED);  /* install handler */
+	 emul_writerom(0x05c9, 0xFB);
       }
    }
    else
    {
       // unpatch ROM
-      writerom(0x056C,v056c);
-      writerom(0x056D,v056d);
-      writerom(0x056E,v056e);
+      emul_writerom(0x056C,v056c);
+      emul_writerom(0x056D,v056d);
+      emul_writerom(0x056E,v056e);
 
-      writerom(0x059E,v059e);
+      emul_writerom(0x059E,v059e);
 
-      writerom(0x05C8, v05c8);
-      writerom(0x05C9, v05c9);
+      emul_writerom(0x05C8, v05c8);
+      emul_writerom(0x05C9, v05c9);
    }
 }
 
@@ -1060,7 +1060,7 @@ static int rom_load(FILE * hfp)
    {
       if(feof_file(hfp))
          break;
-      writerom(i, getbyte(hfp));
+      emul_writerom(i, getbyte(hfp));
    }
    //patch_rom(1);
    return ((i == 0x4000)?0:3);

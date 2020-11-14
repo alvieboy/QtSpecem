@@ -18,21 +18,6 @@ extern UCHAR running;
 extern UCHAR *memory;
 extern UCHAR *rommemory;
 
-
-    /*
-     48K             128K
-     -               page 0
-     8000-bfff       page 1     // 10b
-     c000-ffff       page 2     // 11b
-     -               page 3     
-     -               page 4
-     4000-7fff       page 5     // 01b
-     -               page 6
-     -               page 7
-     */
-
-unsigned char readrom(unsigned short address);
-
 extern void video_writebyte(unsigned short adress, unsigned char byte);
 
 unsigned char mempage128     = 0; // This is not in order!
@@ -97,13 +82,13 @@ static inline unsigned getpage(unsigned short address)
     return page;
 }
 
-void writerom(unsigned short address, unsigned char byte)
+void emul_writerom(unsigned short address, unsigned char byte)
 {
     unsigned real_addr = (address & 0x3FFF)+rom_offset;
     rommemory[real_addr] = byte;
 }
 
-void writerom_indexed(unsigned romno, unsigned short address, unsigned char byte)
+void emul_writerom_no(unsigned romno, unsigned short address, unsigned char byte)
 {
     unsigned real_addr = (address & 0x3FFF)+(romno*0x4000);
     rommemory[(address & 0x3FFF)+(romno*0x4000)] = byte;
@@ -156,11 +141,7 @@ void cpu_writemem(USHORT address, UCHAR byte)
     }
 }
 
-/*=========================================================================*
- *                          writebyte_page                                 *
- *=========================================================================*/
-
-void writebyte_page(UCHAR page, USHORT offset, UCHAR value)
+void emul_writebyte_paged(UCHAR page, USHORT offset, UCHAR value)
 {
     unsigned page_real = rampage_map[page];
     page_real <<= 14;
@@ -172,7 +153,7 @@ void writebyte_page(UCHAR page, USHORT offset, UCHAR value)
     }
 }
 
-void writebyte_direct(unsigned offset, UCHAR value)
+void emul_writebyte_raw(unsigned offset, UCHAR value)
 {
     memory[offset] = value;
     if (offset >= 0x4000 && offset < 0x8000)  {
@@ -230,8 +211,8 @@ UCHAR readbyte(USHORT addr)
 USHORT readword(USHORT addr)
 {
     /* Remember: Z80 word is little-endian */
-    return( (USHORT) cpu_readmem(addr)  |
-           ( ( (USHORT) cpu_readmem(addr+1) ) << 8 ) );
+    return( (USHORT) readbyte(addr)  |
+           ( ( (USHORT) readbyte(addr+1) ) << 8 ) );
 }
 
 
