@@ -9,6 +9,7 @@
 #include "sna_relocs.h"
 #include "SnaFile.h"
 #include <QPushButton>
+#include <unistd.h>
 
 /* FPGA IO ports */
 
@@ -44,6 +45,7 @@ extern "C" {
 #include "z80core/iglobal.h"
 #include "z80core/z80.h"
     static volatile int nmi_pending = 0;
+    static volatile int running = 0;
     //static volatile const uint8_t *nmi_rom = NULL;
     void save_sna(const char * file_name);
     extern void open_sna(const char*);
@@ -63,7 +65,11 @@ extern "C" {
                 set_enable_external_rom(1);
             }
         }
-        execute();
+        if (running) {
+            execute();
+        } else {
+            usleep(10000);
+        }
     }
 
     void retn_called_hook()
@@ -71,7 +77,7 @@ extern "C" {
         // Upon retn, restore ROM.
         printf("RETN called, restoring stock ROM\n");
         set_enable_external_rom(0);
-       //  save_sna("snadump.sna");
+        save_sna("snadump.sna");
     }
 
     void trigger_nmi()
@@ -80,9 +86,15 @@ extern "C" {
         nmi_pending = 1;
     }
 
+    void stop_spectrum()
+    {
+        running = 0;
+    }
+
     void reset_spectrum() {
-        set_enable_external_rom(0);
+        //set_enable_external_rom(0);
         do_reset();
+        running = 1;
     }
 
     extern void toggle_audio();
@@ -241,6 +253,7 @@ void InterfaceZ::addConnection(QAbstractSocket *s)
                        c->m_hdlcrxbuf,
                        sizeof(c->m_hdlcrxbuf),
                        &InterfaceZ::hdlcDataReady,
+                       NULL,
                        c);
     m_clients.push_back(c);
 }
@@ -526,6 +539,12 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
     case FPGA_CMD_READID2:
         fpgaCommandReadID(data, datalen, txbuf);
         break;
+    case FPGA_SPI_CMD_READ_CAP:
+        fpgaCommandReadCapture(data, datalen, txbuf);
+        break;
+    case FPGA_SPI_CMD_WRITE_CAP:
+        fpgaCommandWriteCapture(data, datalen, txbuf);
+        break;
     }
     } catch (std::exception &e) {
         fprintf(stderr,"Cannot parse SPI block: %s\n", e.what());
@@ -604,11 +623,6 @@ void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
 
     fpga_flags = ((uint16_t)data[0]) | (data[2]<<8);
 
-    if ( (old_flags & FPGA_FLAG_RSTSPECT)
-        && !(fpga_flags & FPGA_FLAG_RSTSPECT) ) {
-        reset_spectrum();
-    }
-
     // Triggers
     //printf("Triggers: %02x\n", data[1]);
     
@@ -632,6 +646,16 @@ void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
     }
     if (data[1] & FPGA_FLAG_TRIG_FORCENMI_OFF) {
     }
+
+    if ( (old_flags & FPGA_FLAG_RSTSPECT)
+        && !(fpga_flags & FPGA_FLAG_RSTSPECT) ) {
+        reset_spectrum();
+    }
+    if (fpga_flags & FPGA_FLAG_RSTSPECT) {
+        stop_spectrum();
+    }
+
+
 }
 
 void InterfaceZ::fpgaReadExtRam(const uint8_t *data, int datalen, uint8_t *txbuf)
@@ -888,7 +912,92 @@ void InterfaceZ::linkGPIO(QPushButton *button, uint32_t gpionum)
 }
 
 
+void InterfaceZ::fpgaCommandWriteCapture(const uint8_t *data, int datalen, uint8_t *txbuf)
+{
+    const uint8_t *dptr;
 
+    if (datalen<2)
+        return;
+
+    uint16_t address = (uint16_t)data[1] | ((uint16_t)data[0]<<8);
+    printf("Capture address %08x\n", address);
+
+    datalen-=2;
+
+    dptr = &data[2];
+
+    while (datalen--) {
+        if (address & (1<<13)) {
+        } else {
+            // register access
+            printf("Off %08x\n", address&31);
+            m_capture_wr_regs.raw[address & 31] = *dptr++;
+            captureRegsWritten();
+        }
+        address++;
+    }
+}
+
+void InterfaceZ::fpgaCommandReadCapture(const uint8_t *data, int datalen, uint8_t *txbuf)
+{
+    if (datalen<3)
+        return;
+
+    uint16_t address = (uint16_t)data[1] | ((uint16_t)data[0]<<8);
+    printf("Capture address %08x\n", address);
+    datalen-=3;
+    txbuf+=3; // Move past address and dummy
+
+    if (address & (1<<13)) {
+        printf("Capture RAM access, RAM %d offset %d ",
+               address&(1<<12)?1:0, address&4095);
+    }
+    while (datalen--) {
+        if (address & (1<<13)) {
+            if (address & (1<<12)) {
+                // Non-trig
+                *txbuf++ = m_capture_buffer_nontrig[ address & 4095];
+            } else {
+                *txbuf++ = m_capture_buffer_trig[ address & 4095];
+            }
+        } else {
+            *txbuf++ = m_capture_rd_regs.raw[address& 15];
+        }
+        address++;
+    }
+}
+
+void InterfaceZ::simulateCapture()
+{
+    uint32_t *trig = (uint32_t*)&m_capture_buffer_trig[0];
+    uint32_t *nontrig = (uint32_t*)&m_capture_buffer_nontrig[0];
+    int i;
+    for (i=0;i<1024;i++) {
+        *nontrig++ = i & 0xff;
+        *trig++ = 0;
+    }
+}
+
+void InterfaceZ::captureRegsWritten()
+{
+    printf("Capture regs written\n");
+    printf(" * Mask : %08x\n", m_capture_wr_regs.mask);
+    printf(" * Val  : %08x\n", m_capture_wr_regs.val);
+    printf(" * Edge : %08x\n", m_capture_wr_regs.edge);
+    printf(" * Ctrl : %08x\n", m_capture_wr_regs.control);
+
+    if (m_capture_wr_regs.control & 0x80000000) {
+        qDebug()<<"********* Capture started *********";
+        m_capture_wr_regs.control &= ~0x80000000;
+        // Simulate read
+        simulateCapture();
+        m_capture_rd_regs.status = (1<<0); // Counter zero
+        m_capture_rd_regs.counter = 0;
+        m_capture_rd_regs.trigger_address = 0x1F0;
+        m_capture_rd_regs.control;
+
+    }
+}
 
 static FILE *vcdfile = NULL;
 

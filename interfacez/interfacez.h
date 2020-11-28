@@ -37,12 +37,40 @@ class QPushButton;
 #define FPGA_CMD_READ_CMDFIFO_DATA (0xFB)
 #define FPGA_CMD_READID1 (0x9E)
 #define FPGA_CMD_READID2 (0x9F)
+#define FPGA_SPI_CMD_READ_CAP (0x62)
+#define FPGA_SPI_CMD_WRITE_CAP (0x63)
 
 
 #define PIN_NUM_SWITCH 34
 #define PIN_NUM_CMD_INTERRUPT 27
 #define PIN_NUM_SPECT_INTERRUPT 26
 #define PIN_NUM_USB_INTERRUPT 22
+
+typedef union {
+    struct {
+        uint32_t mask;
+        uint32_t val;
+        uint32_t edge;
+        uint32_t unused;
+        uint32_t control;
+        uint32_t unused2;
+        uint32_t unused3;
+        uint32_t unused4;
+    };
+    uint8_t raw[32];
+} capture_wr_regs_t;
+
+typedef union {
+    struct {
+        uint32_t status;
+        uint32_t counter;
+        uint32_t trigger_address;
+        uint32_t control;
+    };
+    uint8_t raw[16];
+} capture_rd_regs_t;
+
+
 
 class InterfaceZ: public QObject
 {
@@ -118,8 +146,12 @@ protected:
     void fpgaWriteTapFifo(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaWriteTapFifoCmd(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaGetTapFifoUsage(const uint8_t *data, int datalen, uint8_t *txbuf);
-    void cmdFifoWriteEvent();
+    void fpgaCommandReadCapture(const uint8_t *data, int datalen, uint8_t *txbuf);
+    void fpgaCommandWriteCapture(const uint8_t *data, int datalen, uint8_t *txbuf);
 
+    void cmdFifoWriteEvent();
+    void captureRegsWritten();
+    void simulateCapture();
     class DataShortException : public std::exception {
     };
 
@@ -195,6 +227,12 @@ private:
     QQueue<uint8_t> m_resourcefifo;
     QQueue<uint8_t> m_cmdfifo;
     QQueue<uint16_t> m_tapfifo;
+
+    uint8_t m_capture_buffer_nontrig[4096];
+    uint8_t m_capture_buffer_trig[4096];
+
+    capture_wr_regs_t m_capture_wr_regs;
+    capture_rd_regs_t m_capture_rd_regs;
 
     QList<Client*> m_clients;
     uint16_t fpga_flags;
