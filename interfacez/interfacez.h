@@ -153,6 +153,8 @@ protected:
     void captureRegsWritten();
     void simulateCapture();
     class DataShortException : public std::exception {
+    public:
+        const char *what() const noexcept { return "Data too short"; }
     };
 
     static const uint8_t *extractbe16(const uint8_t *source, int &datalen, uint16_t &target){
@@ -196,6 +198,7 @@ protected:
         return source;
     }
     void sendGPIOupdate();
+    void debug(const char *fmt, ...);
 signals:
     void tapDataReady();
 

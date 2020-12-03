@@ -1,5 +1,4 @@
 #include "interfacez.h"
-#include <QDebug>
 #include <QHostAddress>
 #include <QTcpSocket>
 #include <QObject>
@@ -41,6 +40,15 @@ static QList<unsigned long long> audio_event_queue;
 
 InterfaceZ *InterfaceZ::self = NULL;
 
+static void interfacez_debug(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    vprintf(fmt, ap);
+    va_end(ap);
+    printf("\r\n");
+}
+
 extern "C" {
 #include "z80core/iglobal.h"
 #include "z80core/z80.h"
@@ -61,7 +69,7 @@ extern "C" {
             do_nmi_int();
             if (1) {
                 // test
-                qDebug()<<"Enabling external ROM";
+                interfacez_debug("Enabling external ROM");
                 set_enable_external_rom(1);
             }
         }
@@ -75,7 +83,7 @@ extern "C" {
     void retn_called_hook()
     {
         // Upon retn, restore ROM.
-        printf("RETN called, restoring stock ROM\n");
+        interfacez_debug("RETN called, restoring stock ROM");
         set_enable_external_rom(0);
         save_sna("snadump.sna");
     }
@@ -110,11 +118,11 @@ extern "C" {
 
 
     void insn_executed(unsigned long long ticks) {
-        //printf("%lld\n", ticks);
+        //interfacez_debug("%lld\n", ticks);
         if (audio_event_queue.size()) {
             unsigned long long expires = audio_event_queue.front();
             if (expires <= ticks) {
-                //printf("Audio event %lld %lld\n", expires, ticks);
+                //interfacez_debug("Audio event %lld %lld\n", expires, ticks);
                 audio_event_queue.pop_front();
                 toggle_audio();
             }
@@ -126,13 +134,13 @@ extern "C" {
     void audio_start()
     {
         startpos = get_clock_ticks_since_startup();
-        printf("Start play %lld\n", startpos);
+        interfacez_debug("Start play %lld", startpos);
     }
 
     void audio_push(unsigned delta)
     {
         startpos += delta;
-        //printf("Pulse %u\n", delta);
+        //interfacez_debug("Pulse %u\n", delta);
         audio_event_queue.push_back( startpos );
         //log_audio(startpos);
     }
@@ -217,7 +225,7 @@ int InterfaceZ::init()
     connect(m_fpgasocket, &QTcpServer::newConnection, this, &InterfaceZ::newConnection);
 
     if (!m_fpgasocket->listen(QHostAddress::Any, 8007)) { // QTcpSocket::ReuseAddressHint
-        qDebug()<<"Cannot listen";
+        interfacez_debug("Cannot listen");
         return -1;
     }
 
@@ -270,7 +278,7 @@ void InterfaceZ::setCommsSocket(int sock)
 void InterfaceZ::socketError(InterfaceZ::Client *c, QAbstractSocket::SocketError error)
 {
     Q_UNUSED(error);
-    qDebug()<<"Socket error"<<c->s->error();
+    interfacez_debug("Socket error %s",c->s->error());
     c->s->close();
 
     int i = m_clients.indexOf(c);
@@ -287,7 +295,7 @@ UCHAR InterfaceZ::ioread(USHORT address)
     //if ((address & 0x8003)==0x8001) {
     //    return 0x00;
     //}
-    //printf("IO read %04x\n", address);
+    //interfacez_debug("IO read %04x\n", address);
     switch (address & 0xFF) {
     case 0x05:
         val = 0x39; //Bg
@@ -319,7 +327,7 @@ UCHAR InterfaceZ::ioread(USHORT address)
         break;
 
     case FPGA_PORT_RAM_DATA:
-        //printf("return RAM[0x%06x] = 0x%02x\n", extramptr, extram[extramptr]);
+        //interfacez_debug("return RAM[0x%06x] = 0x%02x\n", extramptr, extram[extramptr]);
         val = extram[extramptr++];
         break;
 
@@ -339,7 +347,7 @@ UCHAR InterfaceZ::ioread(USHORT address)
         break;
     }
 
-//    printf("port read %04x = %02x\n", address, val);
+//    interfacez_debug("port read %04x = %02x\n", address, val);
 
     return val;
 }
@@ -351,7 +359,7 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
 
 
     //if ((address & 0x8003)==0x8001) {
-    //printf("port write %04x = %02x\n", address, value);
+    //interfacez_debug("port write %04x = %02x\n", address, value);
     //   return;
     //}
 
@@ -360,7 +368,7 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
     switch (address & 0xFF) {
     case FPGA_PORT_SCRATCH0:
         if (value=='\n') {
-            printf("DEBUG: %s\n", m_debug.toLatin1().constData());
+            interfacez_debug("DEBUG: %s", m_debug.toLatin1().constData());
             m_debug.clear();
         } else {
             m_debug.append(char(value));
@@ -370,7 +378,7 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
 
 
     case FPGA_PORT_CMD_FIFO_DATA: // Cmd fifo
-        //printf("CMD FIFO write: 0x%04x 0x%02x\n", address, value);
+        interfacez_debug("CMD FIFO write: 0x%04x 0x%02x", address, value);
         if (m_cmdfifo.size()<32) {
             m_cmdfifo.push_back(value);
             cmdFifoWriteEvent();
@@ -380,14 +388,14 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
         // Address LSB
         extramptr &= 0xFFFF00;
         extramptr |= value;
-        //printf("EXT ram pointer (0): %06x\n", extramptr);
+        //interfacez_debug("EXT ram pointer (0): %06x", extramptr);
         break;
 
     case FPGA_PORT_RAM_ADDR_1:
         // Address hSB
         extramptr &= 0xFF00FF;
         extramptr |= ((uint32_t)value)<<8;
-        //printf("EXT ram pointer (1): %06x\n", extramptr);
+        //interfacez_debug("EXT ram pointer (1): %06x", extramptr);
         break;
 
     case FPGA_PORT_RAM_ADDR_2:
@@ -397,18 +405,18 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
         value &= 0x3;
 
         extramptr |= ((uint32_t)value)<<16;
-        //printf("EXT ram pointer (2): %06x (%02x)\n", extramptr, value);
+        //interfacez_debug("EXT ram pointer (2): %06x (%02x)", extramptr, value);
         break;
 
     case FPGA_PORT_RAM_DATA:
-        //printf("RAM[0x%06x] = 0x%02x\n", extramptr, value);
+        //interfacez_debug("RAM[0x%06x] = 0x%02x", extramptr, value);
         extram[extramptr++] = value;
         if (extramptr>=sizeof(extram)) {
             extramptr=0;
         }
         break;
     default:
-        printf("Unknown IO port accessed: %04x\n", address);
+        interfacez_debug("Unknown IO port accessed: %04x", address);
     }
 }
 
@@ -418,7 +426,6 @@ void InterfaceZ::readyRead(InterfaceZ::Client *c)
 {
     uint8_t rxbuf[256];
 
-//    qDebug()<<"Reading data";
     int len;
 
     do {
@@ -439,7 +446,7 @@ static int do_trace=0;
 void rom_access_hook(USHORT address, UCHAR data)
 {
     if (do_trace) {
-        printf("ROM: %04x: %02x\n", address, data);
+        interfacez_debug("ROM: %04x: %02x", address, data);
     }
 }
 void enable_trace()
@@ -449,7 +456,7 @@ void enable_trace()
 
 void InterfaceZ::onNMI()
 {
-    printf(" ***** NMI ***** (custom: %s)\n", customromloaded?"yes":"no");
+    interfacez_debug(" ***** NMI ***** (custom: %s)", customromloaded?"yes":"no");
     //trigger_nmi(customromloaded ? customrom : NULL);
     for (auto i: m_clients) {
         i->gpioEvent(PIN_NUM_SWITCH);
@@ -462,7 +469,7 @@ void InterfaceZ::loadCustomROM(const char *name)
     QFile file(name);
     QByteArray data;
     const char * p;
-    printf("Loading custom ROM from %s\n", name);
+    interfacez_debug("Loading custom ROM from %s", name);
     if(file.open(QIODevice::ReadOnly)){
         data=file.readAll();
         file.close();
@@ -470,7 +477,7 @@ void InterfaceZ::loadCustomROM(const char *name)
         for (int i=0; i < 16384 ; i++)
             *(extram+i) = *(p++);
     } else {
-        printf("Erorr loading custom ROM from %s\n", name);
+        interfacez_debug("Erorr loading custom ROM from %s", name);
 
         return;
     }
@@ -486,7 +493,16 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
     uint8_t *txbuf_complete = (uint8_t*)malloc(datalen+ 8);
     txbuf_complete[0] = cmd;
 
-    //printf("CMD: 0x%02x len %d\n", cmd, datalen);
+    //interfacez_debug("CMD: 0x%02x len %d", cmd, datalen);
+
+    do{
+        printf("[Request] ");
+        int i;
+        for (i=0;i<datalen;i++) {
+            printf(" %02x",data[i]);
+        }
+        printf("\n");
+    } while (0);
 
     data++;
     datalen--;
@@ -547,13 +563,21 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
         break;
     }
     } catch (std::exception &e) {
-        fprintf(stderr,"Cannot parse SPI block: %s\n", e.what());
+        fprintf(stderr,"Cannot parse SPI block: %s", e.what());
     }
 
 
     hdlc_encoder__begin(&c->m_hdlc_encoder);
     uint8_t scmd = 0x01;
     hdlc_encoder__write(&c->m_hdlc_encoder, &scmd, sizeof(scmd));
+    do{
+        printf("[Reply] ");
+        int i;
+        for (i=0;i<datalen+1;i++) {
+            printf(" %02x",txbuf_complete[i]);
+        }
+        printf("\n");
+    } while (0);
     hdlc_encoder__write(&c->m_hdlc_encoder, txbuf_complete, datalen+1);
     hdlc_encoder__end(&c->m_hdlc_encoder);
     free(txbuf_complete);
@@ -571,12 +595,11 @@ void InterfaceZ::fpgaCommandReadID(const uint8_t *data, int datalen, uint8_t *tx
 
 
 
-#define FPGA_STATUS_DATAFIFO_EMPTY (1<<0)
-#define FPGA_STATUS_RESFIFO_FULL   (1<<1)
-#define FPGA_STATUS_RESFIFO_QFULL  (1<<2)
-#define FPGA_STATUS_RESFIFO_HFULL  (1<<3)
-#define FPGA_STATUS_RESFIFO_QQQFULL  (1<<4)
-#define FPGA_STATUS_CMDFIFO_EMPTY  (1<<5)
+#define FPGA_STATUS_RESFIFO_FULL   (1<<0)
+#define FPGA_STATUS_RESFIFO_QFULL  (1<<1)
+#define FPGA_STATUS_RESFIFO_HFULL  (1<<2)
+#define FPGA_STATUS_RESFIFO_QQQFULL  (1<<3)
+//#define FPGA_STATUS_CMDFIFO_EMPTY  (1<<5)
 
 #define RESFIFO_SIZE 1024
 
@@ -588,10 +611,10 @@ void InterfaceZ::fpgaReadStatus(const uint8_t *data, int datalen, uint8_t *txbuf
         throw DataShortException();
 
     uint8_t status = 0;
-    if (m_cmdfifo.empty()) {
+/*    if (m_cmdfifo.empty()) {
         status |= FPGA_STATUS_CMDFIFO_EMPTY;
     }
-
+  */
     if (m_resourcefifo.size()>=RESFIFO_SIZE/4) {
         status |= FPGA_STATUS_RESFIFO_QFULL;
     }
@@ -605,8 +628,14 @@ void InterfaceZ::fpgaReadStatus(const uint8_t *data, int datalen, uint8_t *txbuf
     if (m_resourcefifo.size()>=(RESFIFO_SIZE*2)/3) {
         status |= FPGA_STATUS_RESFIFO_FULL;
     }
+    unsigned cmdfifosize = m_cmdfifo.size();
 
+    if (cmdfifosize>4)
+        cmdfifosize = 4;
 
+    status |= (cmdfifosize<<4); //4,5,6 bit.
+
+    interfacez_debug("*** returning status %02x", status);
     txbuf[1] = status;
 }
 
@@ -619,12 +648,12 @@ void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
 
     uint16_t old_flags = fpga_flags;
 
-    //printf("Set Flags %02x %02x %02x\n", data[0], data[1], data[2]);
+    //interfacez_debug("Set Flags %02x %02x %02x", data[0], data[1], data[2]);
 
     fpga_flags = ((uint16_t)data[0]) | (data[2]<<8);
 
     // Triggers
-    //printf("Triggers: %02x\n", data[1]);
+    //interfacez_debug("Triggers: %02x", data[1]);
     
     if (data[1] & FPGA_FLAG_TRIG_RESOURCEFIFO_RESET) {
     }
@@ -664,7 +693,7 @@ void InterfaceZ::fpgaReadExtRam(const uint8_t *data, int datalen, uint8_t *txbuf
     data = extractbe24(data,datalen,offset);
 
     if((offset+datalen) > sizeof(extram)) {
-        printf("Attempt to read outside extram, offset 0x%08x len %d\n", offset, datalen);
+        interfacez_debug("Attempt to read outside extram, offset 0x%08x len %d", offset, datalen);
         return;
     }
 
@@ -680,17 +709,17 @@ void InterfaceZ::fpgaWriteExtRam(const uint8_t *data, int datalen, uint8_t *txbu
     data = extractbe24(data,datalen,offset);
 
     if((offset+datalen) > sizeof(extram)) {
-        printf("Attempt to read outside extram, offset 0x%08x len %d\n", offset, datalen);
+        interfacez_debug("Attempt to read outside extram, offset 0x%08x len %d", offset, datalen);
         return;
     }
 #if 0
     do {
-        printf("Data mem write %08x: [", offset);
+        interfacez_debug("Data mem write %08x: [", offset);
 
         for (int i=0;i<datalen;i++) {
-            printf(" %02x", data[3+i]);
+            interfacez_debug(" %02x", data[3+i]);
         }
-        printf(" ]\n");
+        interfacez_debug(" ]");
     } while (0);
 #endif
     memcpy( &extram[offset], data, datalen);
@@ -699,23 +728,23 @@ void InterfaceZ::fpgaWriteExtRam(const uint8_t *data, int datalen, uint8_t *txbu
 void InterfaceZ::fpgaWriteResFifo(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
     Q_UNUSED(txbuf);
-    printf("Resource FIFO write: [");
+    interfacez_debug("Resource FIFO write: [");
     while (datalen--) {
-        printf(" %02x", *data);
+        interfacez_debug(" %02x", *data);
         m_resourcefifo.push_back(*data++);
     }
-    printf(" ]\n");
+    interfacez_debug(" ]");
 }
 
 void InterfaceZ::fpgaWriteTapFifo(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
     Q_UNUSED(txbuf);
-    printf("TAP FIFO write: [");
+    interfacez_debug("TAP FIFO write: [");
     int i;
     for (i=0;i<datalen;i++) {
-        printf(" %02x", data[i]);
+        interfacez_debug(" %02x", data[i]);
     }
-    printf(" ]\n");
+    interfacez_debug(" ]");
 
     while (datalen--) {
         m_player.handleStreamData(*data);
@@ -726,13 +755,13 @@ void InterfaceZ::fpgaWriteTapFifo(const uint8_t *data, int datalen, uint8_t *txb
 void InterfaceZ::fpgaWriteTapFifoCmd(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
     Q_UNUSED(txbuf);
-    printf("TAP FIFO write (cmd): [");
+    interfacez_debug("TAP FIFO write (cmd): [");
     while (datalen--) {
         m_player.handleStreamData(*data | 0x100);
-        printf(" %02x", *data);
+        interfacez_debug(" %02x", *data);
         data++;
     }
-    printf(" ]\n");
+    interfacez_debug(" ]");
 }
 
 void InterfaceZ::fpgaGetTapFifoUsage(const uint8_t *data, int datalen, uint8_t *txbuf)
@@ -779,19 +808,34 @@ void InterfaceZ::fpgaGetRegs32(const uint8_t *data, int datalen, uint8_t *txbuf)
 void InterfaceZ::fpgaReadCmdFifo(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
     Q_UNUSED(data);
+
     if (datalen<3)
         throw DataShortException();
 
-    bool empty = m_cmdfifo.empty();
-    if (empty) {
-        txbuf[1] = 0xFF;
-    } else {
-        txbuf[1] = 0x00;
+
+    uint8_t len = data[0];
+    uint8_t *ptr = &txbuf[2];
+
+    datalen-=2;
+
+    interfacez_debug("Request %d from fifo, datalen %d fifo size %d",
+                     len,
+                     datalen,
+                     m_cmdfifo.size());
+
+    while (len--) {
+        if (datalen==0)
+            break;
+        if (m_cmdfifo.empty())
+            break;
+
         uint8_t v = m_cmdfifo.front();
-      //  printf("Read CMD fifo: %02x\n", v);
-        txbuf[2] = v;
+        interfacez_debug("Data: %02x", v);
         m_cmdfifo.pop_front();
+        *ptr++ = v;
+        datalen--;
     }
+    interfacez_debug("End of request, fifo len %d",m_cmdfifo.size());
 }
 
 
@@ -835,7 +879,7 @@ UCHAR InterfaceZ::romread(USHORT address)
             value = extram[MEMLAYOUT_ROM0_BASEADDRESS+address];
         } else {
             value = extram[MEMLAYOUT_RAM_BASEADDRESS(m_ram)+address];
-         //   printf("ROM READ %04x: %02x\n", address, value);
+         //   interfacez_debug("ROM READ %04x: %02x", address, value);
         }
         break;
     case 1:
@@ -843,7 +887,7 @@ UCHAR InterfaceZ::romread(USHORT address)
             value = extram[MEMLAYOUT_ROM1_BASEADDRESS+address];
         } else {
             value = extram[MEMLAYOUT_RAM_BASEADDRESS(m_ram)+address];
-         //   printf("ROM READ %04x: %02x\n", address, value);
+         //   interfacez_debug("ROM READ %04x: %02x", address, value);
         }
         break;
     case 2:
@@ -857,7 +901,7 @@ UCHAR InterfaceZ::romread(USHORT address)
 
 void InterfaceZ::romwrite(USHORT address, UCHAR value)
 {
-    //printf("ROM WRITE %04x: %02x\n", address, value);
+    //interfacez_debug("ROM WRITE %04x: %02x", address, value);
     switch (m_rom) {
     case 0: /* Fall-through */
     case 1:
@@ -878,7 +922,7 @@ void InterfaceZ::sendGPIOupdate()
 
 void InterfaceZ::Client::sendGPIOupdate(uint64_t v)
 {
-    qDebug()<<"Sending update GPIO";
+    interfacez_debug("Sending update GPIO");
     hdlc_encoder__begin(&m_hdlc_encoder);
     uint8_t cmd[9]= { 0x02,
     (uint8_t)((v>>56)&0xff),
@@ -893,9 +937,9 @@ void InterfaceZ::Client::sendGPIOupdate(uint64_t v)
     {
         unsigned int i;
         for (i=0;i<sizeof(cmd);i++) {
-            printf("0x%02x ", cmd[i]);
+            interfacez_debug("0x%02x ", cmd[i]);
         }
-        printf("\n");
+        interfacez_debug("");
     }
     hdlc_encoder__write(&m_hdlc_encoder, &cmd, sizeof(cmd));
     hdlc_encoder__end(&m_hdlc_encoder);
@@ -904,10 +948,10 @@ void InterfaceZ::Client::sendGPIOupdate(uint64_t v)
 void InterfaceZ::linkGPIO(QPushButton *button, uint32_t gpionum)
 {
     connect(button, &QPushButton::pressed, this, [this,gpionum](){ m_gpiostate &= ~(1ULL<<gpionum);
-            qDebug()<<"Clear"<<gpionum;
+            //qDebug()<<"Clear"<<gpionum;
             sendGPIOupdate(); } );
     connect(button, &QPushButton::released, this, [this,gpionum](){ m_gpiostate |= (1ULL<<gpionum);
-            qDebug()<<"Set"<<gpionum;
+            //qDebug()<<"Set"<<gpionum;
             sendGPIOupdate(); } );
 }
 
@@ -920,7 +964,7 @@ void InterfaceZ::fpgaCommandWriteCapture(const uint8_t *data, int datalen, uint8
         return;
 
     uint16_t address = (uint16_t)data[1] | ((uint16_t)data[0]<<8);
-    printf("Capture address %08x\n", address);
+    interfacez_debug("Capture address %08x", address);
 
     datalen-=2;
 
@@ -930,7 +974,7 @@ void InterfaceZ::fpgaCommandWriteCapture(const uint8_t *data, int datalen, uint8
         if (address & (1<<13)) {
         } else {
             // register access
-            printf("Off %08x\n", address&31);
+            interfacez_debug("Off %08x", address&31);
             m_capture_wr_regs.raw[address & 31] = *dptr++;
             captureRegsWritten();
         }
@@ -944,12 +988,12 @@ void InterfaceZ::fpgaCommandReadCapture(const uint8_t *data, int datalen, uint8_
         return;
 
     uint16_t address = (uint16_t)data[1] | ((uint16_t)data[0]<<8);
-    printf("Capture address %08x\n", address);
+    interfacez_debug("Capture address %08x", address);
     datalen-=3;
     txbuf+=3; // Move past address and dummy
 
     if (address & (1<<13)) {
-        printf("Capture RAM access, RAM %d offset %d ",
+        interfacez_debug("Capture RAM access, RAM %d offset %d ",
                address&(1<<12)?1:0, address&4095);
     }
     while (datalen--) {
@@ -980,14 +1024,14 @@ void InterfaceZ::simulateCapture()
 
 void InterfaceZ::captureRegsWritten()
 {
-    printf("Capture regs written\n");
-    printf(" * Mask : %08x\n", m_capture_wr_regs.mask);
-    printf(" * Val  : %08x\n", m_capture_wr_regs.val);
-    printf(" * Edge : %08x\n", m_capture_wr_regs.edge);
-    printf(" * Ctrl : %08x\n", m_capture_wr_regs.control);
+    interfacez_debug("Capture regs written");
+    interfacez_debug(" * Mask : %08x", m_capture_wr_regs.mask);
+    interfacez_debug(" * Val  : %08x", m_capture_wr_regs.val);
+    interfacez_debug(" * Edge : %08x", m_capture_wr_regs.edge);
+    interfacez_debug(" * Ctrl : %08x", m_capture_wr_regs.control);
 
     if (m_capture_wr_regs.control & 0x80000000) {
-        qDebug()<<"********* Capture started *********";
+        interfacez_debug("********* Capture started *********");
         m_capture_wr_regs.control &= ~0x80000000;
         // Simulate read
         simulateCapture();
