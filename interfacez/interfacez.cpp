@@ -39,14 +39,16 @@
 static QList<unsigned long long> audio_event_queue;
 
 InterfaceZ *InterfaceZ::self = NULL;
-
+static int interfacez_debug_level = 0;
 static void interfacez_debug(const char *fmt, ...)
 {
-    va_list ap;
-    va_start(ap, fmt);
-    vprintf(fmt, ap);
-    va_end(ap);
-    printf("\r\n");
+    if (interfacez_debug_level>0) {
+        va_list ap;
+        va_start(ap, fmt);
+        vprintf(fmt, ap);
+        va_end(ap);
+        printf("\r\n");
+    }
 }
 
 extern "C" {
@@ -495,14 +497,16 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
 
     //interfacez_debug("CMD: 0x%02x len %d", cmd, datalen);
 
-    do{
-        printf("[Request] ");
-        int i;
-        for (i=0;i<datalen;i++) {
-            printf(" %02x",data[i]);
-        }
-        printf("\n");
-    } while (0);
+    if (interfacez_debug_level>0) {
+        do{
+            printf("[Request] ");
+            int i;
+            for (i=0;i<datalen;i++) {
+                printf(" %02x",data[i]);
+            }
+            printf("\n");
+        } while (0);
+    }
 
     data++;
     datalen--;
@@ -570,14 +574,16 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
     hdlc_encoder__begin(&c->m_hdlc_encoder);
     uint8_t scmd = 0x01;
     hdlc_encoder__write(&c->m_hdlc_encoder, &scmd, sizeof(scmd));
-    do{
-        printf("[Reply] ");
-        int i;
-        for (i=0;i<datalen+1;i++) {
-            printf(" %02x",txbuf_complete[i]);
-        }
-        printf("\n");
-    } while (0);
+    if (interfacez_debug_level>0) {
+        do{
+            printf("[Reply] ");
+            int i;
+            for (i=0;i<datalen+1;i++) {
+                printf(" %02x",txbuf_complete[i]);
+            }
+            printf("\n");
+        } while (0);
+    }
     hdlc_encoder__write(&c->m_hdlc_encoder, txbuf_complete, datalen+1);
     hdlc_encoder__end(&c->m_hdlc_encoder);
     free(txbuf_complete);
