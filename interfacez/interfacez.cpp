@@ -22,6 +22,8 @@
 #define FPGA_PORT_RAM_ADDR_1 (0x3B)
 #define FPGA_PORT_RAM_ADDR_2 (0x3F)
 #define FPGA_PORT_RAM_DATA (0x63)
+#define FPGA_PORT_NMIREASON (0x6F)
+
 
 /* Trigger flags */
 
@@ -39,7 +41,7 @@
 static QList<unsigned long long> audio_event_queue;
 
 InterfaceZ *InterfaceZ::self = NULL;
-static int interfacez_debug_level = 0;
+static int interfacez_debug_level = 1;
 static void interfacez_debug(const char *fmt, ...)
 {
     if (interfacez_debug_level>0) {
@@ -56,6 +58,7 @@ extern "C" {
 #include "z80core/z80.h"
     static volatile int nmi_pending = 0;
     static volatile int running = 0;
+    static volatile int forceromonret = 0;
     //static volatile const uint8_t *nmi_rom = NULL;
     void save_sna(const char * file_name);
     extern void open_sna(const char*);
@@ -87,7 +90,16 @@ extern "C" {
         // Upon retn, restore ROM.
         interfacez_debug("RETN called, restoring stock ROM");
         set_enable_external_rom(0);
-        save_sna("snadump.sna");
+        //save_sna("snadump.sna");
+    }
+
+    void ret_called_hook()
+    {
+        if (forceromonret) {
+            interfacez_debug("RET called, restoring stock ROM");
+            set_enable_external_rom(0);
+            forceromonret=0;
+        }
     }
 
     void trigger_nmi()
@@ -113,6 +125,12 @@ extern "C" {
     {
         return InterfaceZ::get()->romread(address);
     }
+
+    extern int rom_is_hooked(USHORT address)
+    {
+        return InterfaceZ::get()->isHooked(address)?1:0;
+    }
+
     extern void external_rom_write(USHORT address, UCHAR value)
     {
         InterfaceZ::get()->romwrite(address, value);
@@ -207,7 +225,12 @@ void InterfaceZ::hdlcDataReady(void *user, const uint8_t *data, unsigned len)
 
 InterfaceZ::InterfaceZ()
 {
+    unsigned i;
     customromloaded = false;
+    for (i=0;i<MAX_ROM_HOOKS;i++) {
+        rom_hooks[i].flags = 0;
+    }
+    m_intline = 0;
 }
 
 int InterfaceZ::init()
@@ -417,6 +440,11 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
             extramptr=0;
         }
         break;
+
+    case FPGA_PORT_NMIREASON:
+        if (value)
+            forceromonret = 1;
+        break;
     default:
         interfacez_debug("Unknown IO port accessed: %04x", address);
     }
@@ -500,7 +528,7 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
     if (interfacez_debug_level>0) {
         do{
             printf("[Request] ");
-            int i;
+            unsigned i;
             for (i=0;i<datalen;i++) {
                 printf(" %02x",data[i]);
             }
@@ -513,59 +541,71 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
 
     uint8_t *txbuf = &txbuf_complete[1]; // Skip command location.
     try {
-    switch(cmd) {
-    case FPGA_CMD_READ_STATUS:
-        fpgaReadStatus(data, datalen, txbuf);
-        break;
-    case FPGA_CMD_READ_VIDEO_MEM:
-        break;
-    case FPGA_CMD_READ_PC:
-        break;
-    case FPGA_CMD_READ_EXTRAM:
-        fpgaReadExtRam(data,datalen,txbuf);
-        break;
-    case FPGA_CMD_WRITE_EXTRAM:
-        fpgaWriteExtRam(data,datalen,txbuf);
-        break;
-    case FPGA_CMD_READ_USB:
-        break;
-    case FPGA_CMD_WRITE_USB:
-        break;
-    case FPGA_CMD_WRITE_RES_FIFO:
-        fpgaWriteResFifo(data,datalen,txbuf);
-        break;
-    case FPGA_CMD_WRITE_TAP_FIFO:
-        fpgaWriteTapFifo(data,datalen,txbuf);
-        break;
-    case FPGA_CMD_WRITE_TAP_FIFO_CMD:
-        fpgaWriteTapFifoCmd(data,datalen,txbuf);
-        break;
-    case FPGA_CMD_GET_TAP_FIFO_USAGE:
-        fpgaGetTapFifoUsage(data,datalen,txbuf);
-        break;
-    case FPGA_CMD_SET_FLAGS:
-        fpgaSetFlags(data, datalen, txbuf);
-        break;
-    case FPGA_CMD_SET_REGS32:
-        fpgaSetRegs32(data,datalen,txbuf);
-        break;
-    case FPGA_CMD_GET_REGS32:
-        fpgaGetRegs32(data,datalen,txbuf);
-        break;
-    case FPGA_CMD_READ_CMDFIFO_DATA:
-        fpgaReadCmdFifo(data,datalen,txbuf);
-        break;
-    case FPGA_CMD_READID1: /* Fall-through */
-    case FPGA_CMD_READID2:
-        fpgaCommandReadID(data, datalen, txbuf);
-        break;
-    case FPGA_SPI_CMD_READ_CAP:
-        fpgaCommandReadCapture(data, datalen, txbuf);
-        break;
-    case FPGA_SPI_CMD_WRITE_CAP:
-        fpgaCommandWriteCapture(data, datalen, txbuf);
-        break;
-    }
+        switch(cmd) {
+        case FPGA_CMD_READ_STATUS:
+            fpgaReadStatus(data, datalen, txbuf);
+            break;
+        case FPGA_CMD_READ_VIDEO_MEM:
+            break;
+        case FPGA_CMD_READ_PC:
+            break;
+        case FPGA_CMD_READ_EXTRAM:
+            fpgaReadExtRam(data,datalen,txbuf);
+            break;
+        case FPGA_CMD_WRITE_EXTRAM:
+            fpgaWriteExtRam(data,datalen,txbuf);
+            break;
+        case FPGA_CMD_READ_USB:
+            break;
+        case FPGA_CMD_WRITE_USB:
+            break;
+        case FPGA_CMD_WRITE_RES_FIFO:
+            fpgaWriteResFifo(data,datalen,txbuf);
+            break;
+        case FPGA_CMD_WRITE_TAP_FIFO:
+            fpgaWriteTapFifo(data,datalen,txbuf);
+            break;
+        case FPGA_CMD_WRITE_TAP_FIFO_CMD:
+            fpgaWriteTapFifoCmd(data,datalen,txbuf);
+            break;
+        case FPGA_CMD_GET_TAP_FIFO_USAGE:
+            fpgaGetTapFifoUsage(data,datalen,txbuf);
+            break;
+        case FPGA_CMD_SET_FLAGS:
+            fpgaSetFlags(data, datalen, txbuf);
+            break;
+        case FPGA_CMD_SET_REGS32:
+            fpgaSetRegs32(data,datalen,txbuf);
+            break;
+        case FPGA_CMD_GET_REGS32:
+            fpgaGetRegs32(data,datalen,txbuf);
+            break;
+        case FPGA_CMD_READ_CMDFIFO_DATA:
+            fpgaReadCmdFifo(data,datalen,txbuf);
+            break;
+        case FPGA_CMD_READID1: /* Fall-through */
+        case FPGA_CMD_READID2:
+            fpgaCommandReadID(data, datalen, txbuf);
+            break;
+        case FPGA_SPI_CMD_READ_CAP:
+            fpgaCommandReadCapture(data, datalen, txbuf);
+            break;
+        case FPGA_SPI_CMD_WRITE_CAP:
+            fpgaCommandWriteCapture(data, datalen, txbuf);
+            break;
+        case FPGA_SPI_CMD_READ_CTRL:
+            fpgaCommandReadControl(data, datalen, txbuf);
+            break;
+        case FPGA_SPI_CMD_WRITE_CTRL:
+            fpgaCommandWriteControl(data, datalen, txbuf);
+            break;
+        case FPGA_SPI_CMD_INTSTATUS:
+            fpgaCommandReadIntStatus(data, datalen, txbuf);
+            break;
+        case FPGA_SPI_CMD_INTCLEAR:
+            fpgaCommandWriteIntClear(data, datalen, txbuf);
+            break;
+        }
     } catch (std::exception &e) {
         fprintf(stderr,"Cannot parse SPI block: %s", e.what());
     }
@@ -577,7 +617,7 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
     if (interfacez_debug_level>0) {
         do{
             printf("[Reply] ");
-            int i;
+            unsigned i;
             for (i=0;i<datalen+1;i++) {
                 printf(" %02x",txbuf_complete[i]);
             }
@@ -856,6 +896,8 @@ void InterfaceZ::Client::gpioEvent(uint8_t v)
 
 void InterfaceZ::cmdFifoWriteEvent()
 {
+    // Activate interrupt line
+    m_intline |= (1<<0);
     for (auto c: m_clients) {
         c->gpioEvent(PIN_NUM_CMD_INTERRUPT);
     }
@@ -964,6 +1006,7 @@ void InterfaceZ::linkGPIO(QPushButton *button, uint32_t gpionum)
 
 void InterfaceZ::fpgaCommandWriteCapture(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
+    Q_UNUSED(txbuf);
     const uint8_t *dptr;
 
     if (datalen<2)
@@ -1017,6 +1060,75 @@ void InterfaceZ::fpgaCommandReadCapture(const uint8_t *data, int datalen, uint8_
     }
 }
 
+void InterfaceZ::fpgaCommandReadControl(const uint8_t *data, int datalen, uint8_t *txbuf)
+{
+    uint16_t address = (uint16_t)data[1] | ((uint16_t)data[0]<<8);
+    address &= (1<<12)-1; // Only 12 bits for address
+}
+
+void InterfaceZ::fpgaCommandWriteControl(const uint8_t *data, int datalen, uint8_t *txbuf)
+{
+    uint16_t address = (uint16_t)data[1] | ((uint16_t)data[0]<<8);
+    address &= (1<<12)-1; // Only 12 bits for address
+    data+=2;
+    datalen-=2;
+    interfacez_debug("CONTROL write");
+    while (datalen--) {
+        //when "1000000" | "1000100" | "1001000" | "1001100" => -- Hook low
+        if ((address & 0x60) == 0x40) {
+            // ROM Hook control
+            unsigned hookno = (address >> 2) & 0x7;
+            if (hookno>MAX_ROM_HOOKS) {
+                interfacez_debug("MAX hooks exceeded");
+            }
+            hookno &= (MAX_ROM_HOOKS-1);
+
+            interfacez_debug("HOOK write %04x", address);
+
+            switch (address&0x03) {
+            case 0x00:
+                // Low
+                rom_hooks[hookno].base &= 0xFF00;
+                rom_hooks[hookno].base |= *data;
+                break;
+            case 0x01:
+                // High
+                rom_hooks[hookno].base &= 0x00FF;
+                rom_hooks[hookno].base |= ((uint16_t)*data)<<8;
+                break;
+            case 0x02:
+                // Len
+                rom_hooks[hookno].len = *data;
+                break;
+            case 0x03:
+                // flags
+                rom_hooks[hookno].flags = *data;
+                if (rom_hooks[hookno].flags) {
+                    interfacez_debug("HOOK %d activated, address %04x len %d", hookno,
+                                     rom_hooks[hookno].base,
+                                     rom_hooks[hookno].len);
+                }
+                break;
+            }
+        }
+        data++;
+        address++;
+    }
+}
+
+void InterfaceZ::fpgaCommandReadIntStatus(const uint8_t *data, int datalen, uint8_t *txbuf)
+{
+    txbuf[1] = m_intline;
+}
+
+void InterfaceZ::fpgaCommandWriteIntClear(const uint8_t *data, int datalen, uint8_t *txbuf)
+{
+    m_intline &= ~data[0];
+}
+
+
+
+
 void InterfaceZ::simulateCapture()
 {
     uint32_t *trig = (uint32_t*)&m_capture_buffer_trig[0];
@@ -1044,9 +1156,25 @@ void InterfaceZ::captureRegsWritten()
         m_capture_rd_regs.status = (1<<0); // Counter zero
         m_capture_rd_regs.counter = 0;
         m_capture_rd_regs.trigger_address = 0x1F0;
-        m_capture_rd_regs.control;
 
     }
+}
+
+
+bool InterfaceZ::isHooked(USHORT address)
+{
+    unsigned i;
+    for (i=0;i<MAX_ROM_HOOKS;i++) {
+        //  if hook_valid_i(i)='1' and a_u_v>=hook_base_i(i) and a_u_v <= hook_len_i(i)+hook_base_i(i) then
+
+        if (rom_hooks[i].flags !=0) {
+            if ((address>=rom_hooks[i].base) &&
+                (address<=rom_hooks[i].base + rom_hooks[i].len )) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 static FILE *vcdfile = NULL;

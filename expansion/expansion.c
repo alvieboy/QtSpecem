@@ -77,6 +77,10 @@ void set_enable_external_rom(int enabled)
 extern UCHAR external_rom_read(USHORT address);
 extern void external_rom_write(USHORT address, UCHAR value);
 
+extern int rom_is_hooked(USHORT address);
+
+extern void external_rom_write(USHORT address, UCHAR value);
+
 void __attribute__((weak)) rom_access_hook(USHORT address __attribute__((unused)),
                                            UCHAR val __attribute__((unused)))
 {
@@ -85,8 +89,15 @@ void __attribute__((weak)) rom_access_hook(USHORT address __attribute__((unused)
 UCHAR readROM(USHORT addr)
 {
     UCHAR val;
-    if (!external_rom_enabled)
-        val =  mem[addr];
+    if (!external_rom_enabled) {
+        // If we have hooks, then we need to load them
+        if (rom_is_hooked(addr)) {
+            val = external_rom_read(addr);
+            //printf("HOOKED %04x %02x\n", addr, val);
+        } else {
+            val =  mem[addr];
+        }
+    }
     else {
         val = external_rom_read(addr);
     }

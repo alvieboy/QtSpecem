@@ -16,6 +16,7 @@
 class QTcpSocket;
 class QPushButton;
 
+#define MAX_ROM_HOOKS 4
 
 /* FPGA commands */
 
@@ -39,6 +40,10 @@ class QPushButton;
 #define FPGA_CMD_READID2 (0x9F)
 #define FPGA_SPI_CMD_READ_CAP (0x62)
 #define FPGA_SPI_CMD_WRITE_CAP (0x63)
+#define FPGA_SPI_CMD_READ_CTRL (0x64)
+#define FPGA_SPI_CMD_WRITE_CTRL (0x65)
+#define FPGA_SPI_CMD_INTSTATUS (0xA1)
+#define FPGA_SPI_CMD_INTCLEAR (0xA0)
 
 
 #define PIN_NUM_SWITCH 34
@@ -109,6 +114,7 @@ public:
     void iowrite(USHORT address, UCHAR value);
     UCHAR romread(USHORT address);
     void romwrite(USHORT address, UCHAR value);
+    bool isHooked(USHORT address);
 
     void loadCustomROM(const char *file);
 
@@ -148,6 +154,10 @@ protected:
     void fpgaGetTapFifoUsage(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaCommandReadCapture(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaCommandWriteCapture(const uint8_t *data, int datalen, uint8_t *txbuf);
+    void fpgaCommandReadControl(const uint8_t *data, int datalen, uint8_t *txbuf);
+    void fpgaCommandWriteControl(const uint8_t *data, int datalen, uint8_t *txbuf);
+    void fpgaCommandReadIntStatus(const uint8_t *data, int datalen, uint8_t *txbuf);
+    void fpgaCommandWriteIntClear(const uint8_t *data, int datalen, uint8_t *txbuf);
 
     void cmdFifoWriteEvent();
     void captureRegsWritten();
@@ -203,8 +213,17 @@ signals:
     void tapDataReady();
 
 private:
+    struct rom_hook {
+        uint16_t base;
+        uint8_t len;
+        uint8_t flags;
+    };
+
+    struct rom_hook rom_hooks[MAX_ROM_HOOKS];
+
     uint8_t m_rom;
     uint8_t m_ram;
+    uint8_t m_intline;
     uint64_t m_gpiostate;
     TapePlayer m_player;
     QTcpServer *m_fpgasocket;
@@ -236,6 +255,7 @@ private:
 
     capture_wr_regs_t m_capture_wr_regs;
     capture_rd_regs_t m_capture_rd_regs;
+    uint8_t intline_m;
 
     QList<Client*> m_clients;
     uint16_t fpga_flags;

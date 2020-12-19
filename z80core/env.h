@@ -100,6 +100,7 @@ unsigned long get_clock_ticks();
 
 
 extern void retn_called_hook(void);
+extern void ret_called_hook(void);
 /* read byte pointed to PC and increment it
  */
 #define Getnextbyte() readbyte(PC++)
