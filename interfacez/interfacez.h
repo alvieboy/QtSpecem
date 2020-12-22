@@ -139,6 +139,9 @@ public:
     //void WiFiConnected();
     void onNMI();
     void linkGPIO(QPushButton *button, uint32_t gpionum);
+    void raiseInterrupt(uint8_t index);
+    void lowerInterrupt(uint8_t index);
+
 protected:
     void fpgaCommandReadID(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf);
@@ -224,6 +227,7 @@ private:
     uint8_t m_rom;
     uint8_t m_ram;
     uint8_t m_intline;
+    bool m_interruptenabled;
     uint64_t m_gpiostate;
     TapePlayer m_player;
     QTcpServer *m_fpgasocket;

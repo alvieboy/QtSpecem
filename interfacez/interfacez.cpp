@@ -231,6 +231,7 @@ InterfaceZ::InterfaceZ()
         rom_hooks[i].flags = 0;
     }
     m_intline = 0;
+    m_interruptenabled = true;
 }
 
 int InterfaceZ::init()
@@ -442,8 +443,15 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
         break;
 
     case FPGA_PORT_NMIREASON:
-        if (value)
+        if (value & 1)
             forceromonret = 1;
+        if (value & 2) {
+            if (get_enable_external_rom()) {
+                set_enable_external_rom(0);
+            }
+        } else {
+            set_enable_external_rom(1);
+        }
         break;
     default:
         interfacez_debug("Unknown IO port accessed: %04x", address);
@@ -882,6 +890,8 @@ void InterfaceZ::fpgaReadCmdFifo(const uint8_t *data, int datalen, uint8_t *txbu
         datalen--;
     }
     interfacez_debug("End of request, fifo len %d",m_cmdfifo.size());
+    if (m_cmdfifo.size()==0)
+        lowerInterrupt(0);
 }
 
 
@@ -893,16 +903,29 @@ void InterfaceZ::Client::gpioEvent(uint8_t v)
     hdlc_encoder__end(&m_hdlc_encoder);
 }
 
-
 void InterfaceZ::cmdFifoWriteEvent()
 {
+    raiseInterrupt(0);
+}
+
+
+void InterfaceZ::raiseInterrupt(uint8_t index)
+{
     // Activate interrupt line
-    m_intline |= (1<<0);
-    for (auto c: m_clients) {
-        c->gpioEvent(PIN_NUM_CMD_INTERRUPT);
+    m_intline |= (1<<index);
+
+    if (m_interruptenabled) {
+        for (auto c: m_clients) {
+            c->gpioEvent(PIN_NUM_CMD_INTERRUPT);
+        }
+        m_interruptenabled = false;
     }
 }
 
+void InterfaceZ::lowerInterrupt(uint8_t index)
+{
+    m_intline &= ~(1<<index);
+}
 
 #define MEMLAYOUT_ROM0_BASEADDRESS (0x000000)
 #define MEMLAYOUT_ROM0_SIZE        (0x002000)
@@ -1118,12 +1141,20 @@ void InterfaceZ::fpgaCommandWriteControl(const uint8_t *data, int datalen, uint8
 
 void InterfaceZ::fpgaCommandReadIntStatus(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
+    interfacez_debug("Reading int status 0x%0x\n", m_intline);
     txbuf[1] = m_intline;
 }
 
 void InterfaceZ::fpgaCommandWriteIntClear(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
-    m_intline &= ~data[0];
+    //m_intline &= ~data[0];
+    m_interruptenabled = true;
+
+    if (m_intline) {
+        for (auto c: m_clients) {
+            c->gpioEvent(PIN_NUM_CMD_INTERRUPT);
+        }
+    }
 }
 
 

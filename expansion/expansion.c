@@ -74,6 +74,12 @@ void set_enable_external_rom(int enabled)
     printf("Set external ROM enabled: %d\n", enabled);
     external_rom_enabled = enabled;
 }
+
+int get_enable_external_rom()
+{
+    return external_rom_enabled;
+}
+
 extern UCHAR external_rom_read(USHORT address);
 extern void external_rom_write(USHORT address, UCHAR value);
 
