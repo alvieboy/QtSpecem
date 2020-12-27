@@ -42,7 +42,8 @@ static QList<unsigned long long> audio_event_queue;
 
 InterfaceZ *InterfaceZ::self = NULL;
 static int interfacez_debug_level = 1;
-static void interfacez_debug(const char *fmt, ...)
+
+void interfacez_debug(const char *fmt, ...)
 {
     if (interfacez_debug_level>0) {
         va_list ap;
@@ -191,20 +192,6 @@ static int strtoint(const char *str, int *dest)
 
 
 
-void InterfaceZ::hdlc_writer(void *userdata, const uint8_t ch)
-{
-    Client *c = static_cast<Client*>(userdata);
-
-    c->m_txarray.append((char)ch);
-}
-
-void InterfaceZ::hdlc_flusher(void *userdata)
-{
-    Client *c = static_cast<Client*>(userdata);
-
-    c->s->write(c->m_txarray);
-    c->m_txarray.clear();
-}
 
 
 UCHAR interfacez__ioread(void*user,USHORT address)
@@ -215,12 +202,6 @@ UCHAR interfacez__ioread(void*user,USHORT address)
 void interfacez__iowrite(void*user,USHORT address, UCHAR value)
 {
     static_cast<InterfaceZ*>(user)->iowrite(address, value);
-}
-
-void InterfaceZ::hdlcDataReady(void *user, const uint8_t *data, unsigned len)
-{
-    Client *c = static_cast<Client*>(user);
-    c->intf->hdlcDataReady(c, data,len);
 }
 
 InterfaceZ::InterfaceZ()
@@ -272,41 +253,27 @@ void InterfaceZ::addConnection(QAbstractSocket *s)
 {
     s->setSocketOption(QAbstractSocket::LowDelayOption, 1);
 
-    Client *c = new Client(this);
+    Client *c = new SocketClient(this, s);
 
-    hdlc_encoder__init(&c->m_hdlc_encoder, &hdlc_writer, &hdlc_flusher, c);
+    m_clients.push_back(c);
+}
 
-    c->s = s;
-
-    connect(s, &QTcpSocket::readyRead, this, [this,c](){ this->readyRead(c); });
-    connect(s, qOverload<QAbstractSocket::SocketError>(&QAbstractSocket::error),
-            this,[this,c](QAbstractSocket::SocketError error){this->socketError(c, error);});
-
-
-    hdlc_decoder__init(&c->m_hdlc_decoder,
-                       c->m_hdlcrxbuf,
-                       sizeof(c->m_hdlcrxbuf),
-                       &InterfaceZ::hdlcDataReady,
-                       NULL,
-                       c);
+void InterfaceZ::addClient(Client *c)
+{
     m_clients.push_back(c);
 }
 
 void InterfaceZ::setCommsSocket(int sock)
 {
-
     QAbstractSocket *s = new QAbstractSocket(QAbstractSocket::UnknownSocketType,this);
     s->setSocketDescriptor(sock);
     addConnection(s);
 }
 
 
-void InterfaceZ::socketError(InterfaceZ::Client *c, QAbstractSocket::SocketError error)
-{
-    Q_UNUSED(error);
-    interfacez_debug("Socket error %s",c->s->error());
-    c->s->close();
 
+void InterfaceZ::removeClient(Client *c)
+{
     int i = m_clients.indexOf(c);
     if (i != -1) {
         m_clients.removeAt(i);
@@ -459,27 +426,6 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
 }
 
 
-
-void InterfaceZ::readyRead(InterfaceZ::Client *c)
-{
-    uint8_t rxbuf[256];
-
-    int len;
-
-    do {
-        len = c->s->read( (char*)rxbuf, sizeof(rxbuf));
-
-        if (len<0) {
-            return;
-        }
-
-        hdlc_decoder__append_buffer(&c->m_hdlc_decoder, rxbuf, len);
-
-    } while (len);
-}
-
-
-
 static int do_trace=0;
 void rom_access_hook(USHORT address, UCHAR data)
 {
@@ -525,11 +471,13 @@ void InterfaceZ::loadCustomROM(const char *name)
     customromloaded = true;
 }
 
-void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
+void InterfaceZ::transceive(Client *c, const uint8_t *data, uint8_t *txbuf, unsigned datalen)
 {
+    //printf("IZ transceive %p %p %d\n", data, txbuf,datalen);
     uint8_t cmd = data[0];
-    uint8_t *txbuf_complete = (uint8_t*)malloc(datalen+ 8);
-    txbuf_complete[0] = cmd;
+
+    //uint8_t *txbuf_complete = (uint8_t*)malloc(datalen+ 8);
+    //txbuf_complete[0] = cmd;
 
     //interfacez_debug("CMD: 0x%02x len %d", cmd, datalen);
 
@@ -547,7 +495,7 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
     data++;
     datalen--;
 
-    uint8_t *txbuf = &txbuf_complete[1]; // Skip command location.
+    //uint8_t *txdatabuf = &txbuf_complete[1]; // Skip command location.
     try {
         switch(cmd) {
         case FPGA_CMD_READ_STATUS:
@@ -618,23 +566,17 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
         fprintf(stderr,"Cannot parse SPI block: %s", e.what());
     }
 
-
-    hdlc_encoder__begin(&c->m_hdlc_encoder);
-    uint8_t scmd = 0x01;
-    hdlc_encoder__write(&c->m_hdlc_encoder, &scmd, sizeof(scmd));
     if (interfacez_debug_level>6) {
         do{
             printf("[Reply] ");
             unsigned i;
             for (i=0;i<datalen+1;i++) {
-                printf(" %02x",txbuf_complete[i]);
+                printf(" %02x",txbuf[i]);
             }
             printf("\n");
         } while (0);
     }
-    hdlc_encoder__write(&c->m_hdlc_encoder, txbuf_complete, datalen+1);
-    hdlc_encoder__end(&c->m_hdlc_encoder);
-    free(txbuf_complete);
+
 }
 
 void InterfaceZ::fpgaCommandReadID(const uint8_t *data, int datalen, uint8_t *txbuf)
@@ -895,13 +837,6 @@ void InterfaceZ::fpgaReadCmdFifo(const uint8_t *data, int datalen, uint8_t *txbu
 }
 
 
-void InterfaceZ::Client::gpioEvent(uint8_t v)
-{
-    hdlc_encoder__begin(&m_hdlc_encoder);
-    uint8_t cmd[2]= { 0x00, v };
-    hdlc_encoder__write(&m_hdlc_encoder, &cmd, sizeof(cmd));
-    hdlc_encoder__end(&m_hdlc_encoder);
-}
 
 void InterfaceZ::cmdFifoWriteEvent()
 {
@@ -991,30 +926,6 @@ void InterfaceZ::sendGPIOupdate()
 
 }
 
-void InterfaceZ::Client::sendGPIOupdate(uint64_t v)
-{
-    interfacez_debug("Sending update GPIO");
-    hdlc_encoder__begin(&m_hdlc_encoder);
-    uint8_t cmd[9]= { 0x02,
-    (uint8_t)((v>>56)&0xff),
-    (uint8_t)((v>>48)&0xff),
-    (uint8_t)((v>>40)&0xff),
-    (uint8_t)((v>>32)&0xff),
-    (uint8_t)((v>>24)&0xff),
-    (uint8_t)((v>>16)&0xff),
-    (uint8_t)((v>>8)&0xff),
-    (uint8_t)((v>>0)&0xff),
-    };
-    {
-        unsigned int i;
-        for (i=0;i<sizeof(cmd);i++) {
-            interfacez_debug("0x%02x ", cmd[i]);
-        }
-        interfacez_debug("");
-    }
-    hdlc_encoder__write(&m_hdlc_encoder, &cmd, sizeof(cmd));
-    hdlc_encoder__end(&m_hdlc_encoder);
-}
 
 void InterfaceZ::linkGPIO(QPushButton *button, uint32_t gpionum)
 {
@@ -1207,6 +1118,7 @@ bool InterfaceZ::isHooked(USHORT address)
     }
     return false;
 }
+
 
 static FILE *vcdfile = NULL;
 

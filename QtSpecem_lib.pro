@@ -20,6 +20,9 @@ HEADERS += QtSpecem.h \
            interfacez/interfacez.h \
            interfacez/SnaFile.h \
            interfacez/Tape.h \
+           interfacez/Client.h \
+           interfacez/SocketClient.h \
+           interfacez/LinkClient.h 
 
 SOURCES += main.cpp \
            QtSpecem.cpp \
@@ -54,6 +57,9 @@ SOURCES += main.cpp \
            interfacez/interfacez.cpp \
            interfacez/hdlc_decoder.c \ 
            interfacez/hdlc_encoder.c \
-           interfacez/Tape.cpp
+           interfacez/Tape.cpp \
+           interfacez/Client.cpp \
+           interfacez/SocketClient.cpp \
+           interfacez/LinkClient.cpp
 
 RESOURCES += QtSpecem.qrc

@@ -8,13 +8,17 @@
 #include <QTimer>
 #include <inttypes.h>
 #include "expansion/expansion.h"
-#include "hdlc_decoder.h"
-#include "hdlc_encoder.h"
 #include <stdexcept>
 #include "Tape.h"
 
+#include "Client.h"
+#include "SocketClient.h"
+#include "LinkClient.h"
+
 class QTcpSocket;
 class QPushButton;
+
+void interfacez_debug(const char *fmt, ...);
 
 #define MAX_ROM_HOOKS 4
 
@@ -76,26 +80,10 @@ typedef union {
 } capture_rd_regs_t;
 
 
-
 class InterfaceZ: public QObject
 {
     Q_OBJECT
 public:
-
-    struct Client
-    {
-        Client(InterfaceZ*me): intf(me) {
-        }
-        void gpioEvent(uint8_t);
-        void sendGPIOupdate(uint64_t);
-        QAbstractSocket *s;
-        InterfaceZ *intf;
-        uint8_t m_hdlcrxbuf[8192];
-        hdlc_decoder_t m_hdlc_decoder;
-        hdlc_encoder_t m_hdlc_encoder;
-        QByteArray m_txarray;
-    };
-
 
 private:
     InterfaceZ();
@@ -118,21 +106,20 @@ public:
 
     void loadCustomROM(const char *file);
 
-    static void hdlcDataReady(void *user, const uint8_t *data, unsigned len);
-    void hdlcDataReady(Client *c, const uint8_t *data, unsigned len);
 
-    static void hdlc_writer(void *userdata, const uint8_t c);
-    void hdlc_writer(const uint8_t c);
-    static void hdlc_flusher(void *userdata);
-    void hdlc_flusher(void);
+    //static void hdlc_writer(void *userdata, const uint8_t c);
+    //void hdlc_writer(const uint8_t c);
+    //static void hdlc_flusher(void *userdata);
+    //void hdlc_flusher(void);
     void setCommsSocket(int socket);
     void addConnection(QAbstractSocket *s);
 
+    void transceive(Client *c, const uint8_t *data, uint8_t *tx,  unsigned datalen);
+    void removeClient(Client *c);
+    void addClient(Client *c);
 
     public slots:
     void newConnection();
-    void readyRead(Client*);
-    void socketError(Client*, QAbstractSocket::SocketError);
     //void onSDConnected();
     //void onSDDisconnected();
     //void WiFiScanFinished();
