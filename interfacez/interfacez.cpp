@@ -533,7 +533,7 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
 
     //interfacez_debug("CMD: 0x%02x len %d", cmd, datalen);
 
-    if (interfacez_debug_level>0) {
+    if (interfacez_debug_level>6) {
         do{
             printf("[Request] ");
             unsigned i;
@@ -622,7 +622,7 @@ void InterfaceZ::hdlcDataReady(Client *c, const uint8_t *data, unsigned datalen)
     hdlc_encoder__begin(&c->m_hdlc_encoder);
     uint8_t scmd = 0x01;
     hdlc_encoder__write(&c->m_hdlc_encoder, &scmd, sizeof(scmd));
-    if (interfacez_debug_level>0) {
+    if (interfacez_debug_level>6) {
         do{
             printf("[Reply] ");
             unsigned i;
@@ -689,7 +689,7 @@ void InterfaceZ::fpgaReadStatus(const uint8_t *data, int datalen, uint8_t *txbuf
 
     status |= (cmdfifosize<<4); //4,5,6 bit.
 
-    interfacez_debug("*** returning status %02x", status);
+    //interfacez_debug("*** returning status %02x", status);
     txbuf[1] = status;
 }
 
