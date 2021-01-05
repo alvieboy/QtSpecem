@@ -11,7 +11,9 @@
 #include <string.h>
 
 void save_sna(const char * file_name);
-void insn_executed(unsigned long long clock);
+void insn_executed(unsigned short addr, unsigned long long clock);
+void insn_prefetch(unsigned short addr, unsigned long long clock,
+                  struct Z80vars *vars, union Z80Regs *regs, union Z80IX *ix, union Z80IY *iy);
 unsigned short get_pc() { return PC; }
 /* Increment the lower 7 bits of R in each M1 cycle
 */
@@ -74,8 +76,10 @@ void execute()
    */
         do
         {	
+         USHORT insnpc = PC;
         if (!TraceOn)
         {
+	   insn_prefetch(insnpc, clock_ticks_since_startup, Z80vars, Z80Regs, Z80IX, Z80IY);
 	   inc_R();
 	    /* Call funtion indexed by opcode */
             void (*insnfun)(void) = instruc_tabl[Getnextbyte()];
@@ -106,7 +110,7 @@ void execute()
                  TraceOn--;
            }
         }
-        insn_executed(clock_ticks_since_startup);
+        insn_executed(insnpc, clock_ticks_since_startup);
 	}
         while( (clock_ticks < INT_TIME) && !TraceOn );
    

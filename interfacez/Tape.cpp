@@ -1,5 +1,6 @@
 #include "Tape.h"
 #include <stdio.h>
+#include "vcdlog.h"
 
 extern "C" void audio_push(unsigned delta);
 extern "C" void audio_start(void);
@@ -13,7 +14,7 @@ void TapePlayer::push(unsigned delta)
     if (!playing) {
         playing = true;
         audio_start();
-        log_init("audio.vcd");
+        vcdlog_init("audio.vcd");
     }
     audio_push(delta);
 }

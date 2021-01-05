@@ -6,6 +6,8 @@
 
 #include "env.h"
 
+extern void cpu_halted_interrupts_disabled();
+
 /*=========================================================================*
  *                            daa                                          *
  *=========================================================================*/
@@ -145,7 +147,8 @@ void halt()
 {
    if(!IFF1)
    {
-      Panic("HALT with interrupts disabled!");
+       //Panic("HALT with interrupts disabled!");
+       cpu_halted_interrupts_disabled();
    }
 
    /* This loop is cut because timing software is already

@@ -9,11 +9,12 @@
 #include "SnaFile.h"
 #include <QPushButton>
 #include <unistd.h>
+#include "vcdlog.h"
 
 /* FPGA IO ports */
 
 #define FPGA_PORT_SCRATCH0	(0x23)
-#define FPGA_PORT_SCRATCH1	(0x27)
+#define FPGA_PORT_MISCCTRL	(0x27)
 #define FPGA_PORT_CMD_FIFO_STATUS (0x2B)
 #define FPGA_PORT_CMD_FIFO_DATA (0x67)
 #define FPGA_PORT_RESOURCE_FIFO_STATUS (0x2F)
@@ -23,6 +24,7 @@
 #define FPGA_PORT_RAM_ADDR_2 (0x3F)
 #define FPGA_PORT_RAM_DATA (0x63)
 #define FPGA_PORT_NMIREASON (0x6F)
+#define FPGA_PORT_MEMSEL  (0x6B)
 
 
 /* Trigger flags */
@@ -54,16 +56,79 @@ void interfacez_debug(const char *fmt, ...)
     }
 }
 
+void interfacez_debug_buffer(const uint8_t *buf, unsigned len, const char *fmt, ...)
+{
+    char line[8192];
+    char *endl = &line[0];
+    int i;
+
+    if (interfacez_debug_level>0) {
+        va_list ap;
+        va_start(ap, fmt);
+        endl += vsprintf(line, fmt, ap);
+        va_end(ap);
+        endl = stpcpy(endl, ": [");
+        for (i=0;i<len;i++) {
+            endl += sprintf(endl, " %02x", buf[i]);
+        }
+        endl = stpcpy(endl, "]\r\n");
+        printf("%s", line);
+    }
+}
+
 extern "C" {
 #include "z80core/iglobal.h"
 #include "z80core/z80.h"
+
+#undef IX
+#undef IY
+#undef SP
+
+    static int hook_external_rom_active = 0;
+    static int main_external_rom_active = 0;
+
+    static void update_rom_active() {
+        int prev = get_enable_external_rom();
+        int newa = hook_external_rom_active | main_external_rom_active;
+        interfacez_debug("Switch ROM enabled, old=%d %d %d", prev, hook_external_rom_active, main_external_rom_active);
+        if (prev!=newa) {
+            set_enable_external_rom(newa);
+        }
+    }
+
+    int external_rom_read_hooked(USHORT address)
+    {
+        return InterfaceZ::get()->external_rom_read_hooked(address);
+    }
+
+
+    static inline void set_main_external_rom_active(int val)
+    {
+        main_external_rom_active=val;
+        update_rom_active();
+    }
+
+    static inline void set_hook_external_rom_active(int val)
+    {
+        //hook_external_rom_active=val;
+        //update_rom_active();
+        set_main_external_rom_active(val);
+    }
+    static inline int get_main_external_rom_active() {
+        return main_external_rom_active;
+    }
+
     static volatile int nmi_pending = 0;
     static volatile int running = 0;
     static volatile int forceromonret = 0;
+    static volatile int divmmc_compat = 1;
     //static volatile const uint8_t *nmi_rom = NULL;
     void save_sna(const char * file_name);
     extern void open_sna(const char*);
     extern uint16_t read_DE();
+
+    extern char * ldissbl(USHORT adress);
+    FILE  *trace_file = NULL;
 
     extern unsigned long long get_clock_ticks_since_startup(void);
 
@@ -76,7 +141,7 @@ extern "C" {
             if (1) {
                 // test
                 interfacez_debug("Enabling external ROM");
-                set_enable_external_rom(1);
+                set_main_external_rom_active(1);
             }
         }
         if (running) {
@@ -90,7 +155,7 @@ extern "C" {
     {
         // Upon retn, restore ROM.
         interfacez_debug("RETN called, restoring stock ROM");
-        set_enable_external_rom(0);
+        set_main_external_rom_active(0);
         //save_sna("snadump.sna");
     }
 
@@ -98,11 +163,17 @@ extern "C" {
     {
         if (forceromonret) {
             interfacez_debug("RET called, restoring stock ROM");
-            set_enable_external_rom(0);
+            set_main_external_rom_active(0);
             forceromonret=0;
         }
     }
 
+    void cpu_halted_interrupts_disabled()
+    {
+        interfacez_debug("CPU halted with interrupts disabled");
+        if (trace_file)
+            fclose(trace_file);
+    }
     void trigger_nmi()
     {
        // nmi_rom = rom;
@@ -126,28 +197,29 @@ extern "C" {
     {
         return InterfaceZ::get()->romread(address);
     }
-
+#if 0
     extern int rom_is_hooked(USHORT address)
     {
         return InterfaceZ::get()->isHooked(address)?1:0;
     }
-
+#endif
     extern void external_rom_write(USHORT address, UCHAR value)
     {
         InterfaceZ::get()->romwrite(address, value);
     }
 
 
-    void insn_executed(unsigned long long ticks) {
-        //interfacez_debug("%lld\n", ticks);
-        if (audio_event_queue.size()) {
-            unsigned long long expires = audio_event_queue.front();
-            if (expires <= ticks) {
-                //interfacez_debug("Audio event %lld %lld\n", expires, ticks);
-                audio_event_queue.pop_front();
-                toggle_audio();
-            }
-        }
+    void insn_executed(unsigned short addr, unsigned long long ticks)
+    {
+        InterfaceZ::get()->insn_executed(addr, ticks);
+    }
+
+
+    void insn_prefetch(unsigned short addr, unsigned long long clock,
+                       struct Z80vars *vars, union Z80Regs *regs,
+                        union Z80IX *ix, union Z80IY *iy
+                      ) {
+        InterfaceZ::get()->insn_prefetch(addr,clock,vars,regs,ix,iy);
     }
 
     unsigned long long startpos;
@@ -213,6 +285,7 @@ InterfaceZ::InterfaceZ()
     }
     m_intline = 0;
     m_interruptenabled = true;
+    fpga_flags = 0;
 }
 
 int InterfaceZ::init()
@@ -238,9 +311,24 @@ int InterfaceZ::init()
 
     m_sna_rom_size = -1;
     m_rom = 0;
+    m_spectrumrom = 0; // only for 128K
     m_ram = 0;
     m_gpiostate = 0xFFFFFFFFFFFFFFFF;
+    m_miscctrl = 0;
+
     return r;
+}
+
+void InterfaceZ::enableTrace(const char *file, bool startimmediately)
+{
+    interfacez_debug("Setting trace file to '%s', immediate %s",
+                     file,
+                     startimmediately?"yes":"no");
+    m_tracefilename = file;
+
+    if (startimmediately) {
+        trace_file = fopen(file, "w");
+    }
 }
 
 void InterfaceZ::newConnection()
@@ -284,7 +372,7 @@ void InterfaceZ::removeClient(Client *c)
 UCHAR InterfaceZ::ioread(USHORT address)
 {
     uint8_t val = 0xff;
-
+    unsigned size;
     //if ((address & 0x8003)==0x8001) {
     //    return 0x00;
     //}
@@ -293,9 +381,14 @@ UCHAR InterfaceZ::ioread(USHORT address)
     case 0x05:
         val = 0x39; //Bg
         break;
-
+    case FPGA_PORT_MISCCTRL:
+        val = m_miscctrl;
+        break;
     case FPGA_PORT_CMD_FIFO_STATUS: // Cmd fifo status
-        if (m_cmdfifo.size()>=32) {
+        m_cmdfifomutex.lock();
+        size = m_cmdfifo.size();
+        m_cmdfifomutex.unlock();
+        if (size>=32) {
             val = 0x01;
         } else {
             val = 0x00;
@@ -372,9 +465,13 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
 
     case FPGA_PORT_CMD_FIFO_DATA: // Cmd fifo
         interfacez_debug("CMD FIFO write: 0x%04x 0x%02x", address, value);
+        m_cmdfifomutex.lock();
         if (m_cmdfifo.size()<32) {
             m_cmdfifo.push_back(value);
+            m_cmdfifomutex.unlock();
             cmdFifoWriteEvent();
+        } else {
+            m_cmdfifomutex.unlock();
         }
         break;
     case FPGA_PORT_RAM_ADDR_0:
@@ -413,13 +510,18 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
         if (value & 1)
             forceromonret = 1;
         if (value & 2) {
-            if (get_enable_external_rom()) {
-                set_enable_external_rom(0);
+            if (get_main_external_rom_active()) {
+                set_main_external_rom_active(0);
             }
         } else {
-            set_enable_external_rom(1);
+            set_main_external_rom_active(1);
         }
         break;
+    case FPGA_PORT_MEMSEL:
+        m_ram = value & 0x7;
+        printf("New RAM selected: %d\n", m_ram);
+        break;
+
     default:
         interfacez_debug("Unknown IO port accessed: %04x", address);
     }
@@ -466,7 +568,7 @@ void InterfaceZ::loadCustomROM(const char *name)
         return;
     }
 
-    set_enable_external_rom(1);
+    set_main_external_rom_active(1);
 
     customromloaded = true;
 }
@@ -561,6 +663,14 @@ void InterfaceZ::transceive(Client *c, const uint8_t *data, uint8_t *txbuf, unsi
         case FPGA_SPI_CMD_INTCLEAR:
             fpgaCommandWriteIntClear(data, datalen, txbuf);
             break;
+        case FPGA_SPI_CMD_SET_ROMRAM:
+            fpgaCommandSetRomRam(data, datalen, txbuf);
+            break;
+        case FPGA_CMD_WRITE_MISCCTRL:
+            fpgaCommandWriteMiscCtrl(data, datalen, txbuf);
+            break;
+        default:
+            fprintf(stderr,"Unknown SPI command 0x%02x\n", cmd);
         }
     } catch (std::exception &e) {
         fprintf(stderr,"Cannot parse SPI block: %s", e.what());
@@ -624,7 +734,10 @@ void InterfaceZ::fpgaReadStatus(const uint8_t *data, int datalen, uint8_t *txbuf
     if (m_resourcefifo.size()>=(RESFIFO_SIZE*2)/3) {
         status |= FPGA_STATUS_RESFIFO_FULL;
     }
+
+    m_cmdfifomutex.lock();
     unsigned cmdfifosize = m_cmdfifo.size();
+    m_cmdfifomutex.unlock();
 
     if (cmdfifosize>4)
         cmdfifosize = 4;
@@ -656,15 +769,18 @@ void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
     if (data[1] & FPGA_FLAG_TRIG_FORCEROMONRETN) {
     }
     if (data[1] & FPGA_FLAG_TRIG_FORCEROMCS_ON) {
-        set_enable_external_rom(1);
+        set_main_external_rom_active(1);
     }
     if (data[1] & FPGA_FLAG_TRIG_FORCEROMCS_OFF) {
-        set_enable_external_rom(0);
+        set_main_external_rom_active(0);
     }
     if (data[1] & FPGA_FLAG_TRIG_INTACK) {
     }
     if (data[1] & FPGA_FLAG_TRIG_CMDFIFO_RESET) {
+        m_cmdfifomutex.lock();
         m_cmdfifo.clear();
+        m_cmdfifomutex.unlock();
+
     }
     if (data[1] & FPGA_FLAG_TRIG_FORCENMI_ON) {
         trigger_nmi();
@@ -724,23 +840,19 @@ void InterfaceZ::fpgaWriteExtRam(const uint8_t *data, int datalen, uint8_t *txbu
 void InterfaceZ::fpgaWriteResFifo(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
     Q_UNUSED(txbuf);
-    interfacez_debug("Resource FIFO write: [");
+    //interfacez_debug("Resource FIFO write: [");
     while (datalen--) {
-        interfacez_debug(" %02x", *data);
+      //  interfacez_debug(" %02x", *data);
         m_resourcefifo.push_back(*data++);
     }
-    interfacez_debug(" ]");
+//    interfacez_debug(" ]");
 }
 
 void InterfaceZ::fpgaWriteTapFifo(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
     Q_UNUSED(txbuf);
-    interfacez_debug("TAP FIFO write: [");
-    int i;
-    for (i=0;i<datalen;i++) {
-        interfacez_debug(" %02x", data[i]);
-    }
-    interfacez_debug(" ]");
+
+    interfacez_debug_buffer(data, datalen, "TAP FIFO write");
 
     while (datalen--) {
         m_player.handleStreamData(*data);
@@ -773,6 +885,14 @@ void InterfaceZ::fpgaGetTapFifoUsage(const uint8_t *data, int datalen, uint8_t *
     txbuf[1] = usage & 0xff;
 }
 
+static const char *config1_names[] = {
+    "KBD",
+    "JOY",
+    "MOUSE",
+    "AY",
+    "AY_READ",
+    "DIVMMC_COMPAT"
+};
 
 void InterfaceZ::fpgaSetRegs32(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
@@ -781,8 +901,48 @@ void InterfaceZ::fpgaSetRegs32(const uint8_t *data, int datalen, uint8_t *txbuf)
     uint8_t regnum;
     data = extractu8(data, datalen, regnum);
     data = extractbe32(data, datalen, regdata);
+    uint32_t olddata = regs[regnum];
+
     if (regnum<32) {
         regs[regnum] = regdata;
+    }
+    // Propagate flags
+    if (regnum==2) {
+        char tempstr[128];
+        char *p = tempstr;
+        int i;
+
+        *p = 0;
+        for (i=0;i<6;i++) {
+            if (!(olddata&(1<<i))) {
+                if (regdata&(1<<i)) {
+                    if (*p) {
+                        strcat(p," ");
+                    }
+                    strcat(p, config1_names[i]);
+                }
+            }
+        }
+        if (*p) {
+            interfacez_debug("CONFIG1: SET %s", p);
+        }
+
+        *p = 0;
+        for (i=0;i<6;i++) {
+            if (olddata&(1<<i)) {
+                if (!(regdata&(1<<i))) {
+                    if (*p) {
+                        strcat(p," ");
+                    }
+                    strcat(p, config1_names[i]);
+                }
+            }
+        }
+        if (*p) {
+            interfacez_debug("CONFIG1: CLEAR %s", p);
+        }
+
+        divmmc_compat = (regs[2]>>5) & 1;
     }
 }
 
@@ -819,6 +979,8 @@ void InterfaceZ::fpgaReadCmdFifo(const uint8_t *data, int datalen, uint8_t *txbu
                      datalen,
                      m_cmdfifo.size());
 
+    m_cmdfifomutex.lock();
+
     while (len--) {
         if (datalen==0)
             break;
@@ -826,11 +988,13 @@ void InterfaceZ::fpgaReadCmdFifo(const uint8_t *data, int datalen, uint8_t *txbu
             break;
 
         uint8_t v = m_cmdfifo.front();
-        interfacez_debug("Data: %02x", v);
+        //interfacez_debug("Data: %02x", v);
         m_cmdfifo.pop_front();
         *ptr++ = v;
         datalen--;
     }
+    m_cmdfifomutex.unlock();
+
     interfacez_debug("End of request, fifo len %d",m_cmdfifo.size());
     if (m_cmdfifo.size()==0)
         lowerInterrupt(0);
@@ -869,8 +1033,8 @@ void InterfaceZ::lowerInterrupt(uint8_t index)
 #define MEMLAYOUT_ROM2_BASEADDRESS (0x004000)
 #define MEMLAYOUT_ROM2_SIZE        (0x004000)
 
-#define MEMLAYOUT_RAM_BASEADDRESS(x) (0x010000 + ((x)+0x2000))
-#define MEMLAYOUT_RAM_SIZE(x) (0x1FFF)
+#define MEMLAYOUT_RAM_BASEADDRESS(x) (0x010000 + ((x)*0x2000))
+#define MEMLAYOUT_RAM_MASK(addr) ( (addr) & 0x1FFF )
 
 
 #define NMI_ROM_BASEADDRESS MEMLAYOUT_ROM0_BASEADDRESS
@@ -879,21 +1043,34 @@ void InterfaceZ::lowerInterrupt(uint8_t index)
 UCHAR InterfaceZ::romread(USHORT address)
 {
     uint8_t value = 0;
+    unsigned extram_address;
+
     switch (m_rom) {
     case 0:
         if (address<0x2000) {
             value = extram[MEMLAYOUT_ROM0_BASEADDRESS+address];
         } else {
-            value = extram[MEMLAYOUT_RAM_BASEADDRESS(m_ram)+address];
-         //   interfacez_debug("ROM READ %04x: %02x", address, value);
+            extram_address = MEMLAYOUT_RAM_BASEADDRESS(m_ram) + MEMLAYOUT_RAM_MASK(address & 0x1fff);
+            value = extram[extram_address];
+#if 0
+            interfacez_debug("ROM READ [ram %d] %04x: %02x [%08x base %08x]",
+                             m_ram,
+                             address,
+                             value,
+                             extram_address,
+                             MEMLAYOUT_RAM_BASEADDRESS(m_ram));
+#endif
         }
         break;
     case 1:
         if (address<0x2000) {
             value = extram[MEMLAYOUT_ROM1_BASEADDRESS+address];
         } else {
-            value = extram[MEMLAYOUT_RAM_BASEADDRESS(m_ram)+address];
-         //   interfacez_debug("ROM READ %04x: %02x", address, value);
+            extram_address = MEMLAYOUT_RAM_BASEADDRESS(m_ram) + MEMLAYOUT_RAM_MASK(address);
+            value = extram[extram_address];
+#if 0
+            interfacez_debug("ROM READ [ram %d] %04x: %02x [%08x]", m_ram, address, value, extram_address);
+#endif
         }
         break;
     case 2:
@@ -907,11 +1084,14 @@ UCHAR InterfaceZ::romread(USHORT address)
 
 void InterfaceZ::romwrite(USHORT address, UCHAR value)
 {
-    //interfacez_debug("ROM WRITE %04x: %02x", address, value);
+    unsigned extram_address = MEMLAYOUT_RAM_BASEADDRESS(m_ram)+MEMLAYOUT_RAM_MASK(address);
+#if 0
+    interfacez_debug("ROM WRITE [ram %d] %04x: %02x [%08x]", m_ram, address, value, extram_address);
+#endif
     switch (m_rom) {
     case 0: /* Fall-through */
     case 1:
-        extram[MEMLAYOUT_RAM_BASEADDRESS(m_ram)+address] = value;
+        extram[extram_address] = value;
         break;
     default:
         break;
@@ -1028,7 +1208,7 @@ void InterfaceZ::fpgaCommandWriteControl(const uint8_t *data, int datalen, uint8
             case 0x01:
                 // High
                 rom_hooks[hookno].base &= 0x00FF;
-                rom_hooks[hookno].base |= ((uint16_t)*data)<<8;
+                rom_hooks[hookno].base |= (((uint16_t)*data)<<8) & 0x3FFF;
                 break;
             case 0x02:
                 // Len
@@ -1040,7 +1220,7 @@ void InterfaceZ::fpgaCommandWriteControl(const uint8_t *data, int datalen, uint8
                 if (rom_hooks[hookno].flags) {
                     interfacez_debug("HOOK %d activated, address %04x len %d", hookno,
                                      rom_hooks[hookno].base,
-                                     rom_hooks[hookno].len);
+                                     rom_hooks[hookno].len+1);
                 }
                 break;
             }
@@ -1068,7 +1248,21 @@ void InterfaceZ::fpgaCommandWriteIntClear(const uint8_t *data, int datalen, uint
     }
 }
 
+void InterfaceZ::fpgaCommandSetRomRam(const uint8_t *data, int datalen, uint8_t *txbuf)
+{
+    uint8_t romram = data[0];
+    if (romram & 0x80) {
+        // RAM
+        m_ram = romram & 0x7;
+    } else {
+        m_rom = romram & 0x3;
+    }
+}
 
+void InterfaceZ::fpgaCommandWriteMiscCtrl(const uint8_t *data, int datalen, uint8_t *txbuf)
+{
+    m_miscctrl = data[0];
+}
 
 
 void InterfaceZ::simulateCapture()
@@ -1103,55 +1297,160 @@ void InterfaceZ::captureRegsWritten()
 }
 
 
-bool InterfaceZ::isHooked(USHORT address)
+void InterfaceZ::insn_executed(unsigned short addr, unsigned long long ticks)
 {
-    unsigned i;
-    for (i=0;i<MAX_ROM_HOOKS;i++) {
-        //  if hook_valid_i(i)='1' and a_u_v>=hook_base_i(i) and a_u_v <= hook_len_i(i)+hook_base_i(i) then
+    //interfacez_debug("%lld\n", ticks);
+    if (audio_event_queue.size()) {
+        unsigned long long expires = audio_event_queue.front();
+        if (expires <= ticks) {
+            //interfacez_debug("Audio event %lld %lld\n", expires, ticks);
+            audio_event_queue.pop_front();
+            toggle_audio();
+        }
+    }
 
-        if (rom_hooks[i].flags !=0) {
-            if ((address>=rom_hooks[i].base) &&
-                (address<=rom_hooks[i].base + rom_hooks[i].len )) {
-                return true;
+    /* Check post-hooks and ranged hooks */
+    for (int i=0;i<MAX_ROM_HOOKS;i++) {
+        if (!(rom_hooks[i].flags & ROM_HOOK_FLAG_ACTIVE))
+            continue;
+
+        if ( (rom_hooks[i].flags &ROM_HOOK_FLAG_ROM_MASK)  != ROM_HOOK_FLAG_ROM(m_spectrumrom)) {
+            continue;
+        }
+
+        if ( (rom_hooks[i].flags & ROM_HOOK_FLAG_RANGED) == ROM_HOOK_FLAG_RANGED )
+        {
+            // Ranged hook. Always disable at end of instruction
+#if 0
+            if (hookAddressMatches(addr, rom_hooks[i]) ) {
+                set_hook_external_rom_active(0);
+            }
+#endif
+        } else {
+            if ((rom_hooks[i].flags & (ROM_HOOK_FLAG_PREPOST))==0) {
+                // Post-match hook.
+                if (hookAddressMatches( addr, rom_hooks[i] )) {
+                    int enable = 0;
+                    if (rom_hooks[i].flags & ROM_HOOK_FLAG_SETRESET) {
+                        enable = 1;
+                    }
+                    set_hook_external_rom_active(enable);
+                    interfacez_debug("POST hook match address %04x, set %d\n", addr, enable);
+
+                }
             }
         }
     }
-    return false;
 }
 
-
-static FILE *vcdfile = NULL;
-
-static uint8_t audioval = 0;
-
-void log_audio(unsigned long long tick)
+void InterfaceZ::insn_prefetch(unsigned short addr, unsigned long long clock,
+                               struct Z80vars *vars, union Z80Regs *regs,
+                               union Z80IX *ix, union Z80IY *iy)
 {
-    audioval = !audioval;
-    if (vcdfile) {
-        fprintf(vcdfile, "#%lld\n"
-                "b%d a\n", tick, audioval);
 
+    /* Check pre-hooks and ranged hooks */
+    for (int i=0;i<MAX_ROM_HOOKS;i++) {
+        if (!(rom_hooks[i].flags & ROM_HOOK_FLAG_ACTIVE))
+            continue;
+
+        if ( (rom_hooks[i].flags &ROM_HOOK_FLAG_ROM_MASK)  != ROM_HOOK_FLAG_ROM(m_spectrumrom)) {
+            continue;
+        }
+
+        if ( (rom_hooks[i].flags & ROM_HOOK_FLAG_RANGED) == ROM_HOOK_FLAG_RANGED )
+        {
+#if 0
+            // Ranged hook. Always enable at start of instruction
+            if (hookAddressMatches(addr, rom_hooks[i]) ) {
+                interfacez_debug("PRE hook range match address %04x", addr);
+                set_hook_external_rom_active(1);
+            }
+#endif
+
+        } else {
+            if ((rom_hooks[i].flags & (ROM_HOOK_FLAG_PREPOST))==ROM_HOOK_FLAG_PREPOST) {
+                // Post-match hook.
+                if (hookAddressMatches( addr, rom_hooks[i] )) {
+                    int enable = 0;
+                    if (rom_hooks[i].flags & ROM_HOOK_FLAG_SETRESET) {
+                        enable = 1;
+                    }
+                    set_hook_external_rom_active(enable);
+                    interfacez_debug("PRE hook match address %04x, set %d\n", addr, enable);
+                }
+            }
+        }
+    }
+
+
+    if (trace_file==NULL) {
+        if (m_traceaddress.size()) {
+            for (auto i: m_traceaddress) {
+                if (i==addr) {
+                    interfacez_debug("Starting trace on '%s', address trigger %04x",
+                                     m_tracefilename.c_str(), addr);
+                    trace_file = fopen(m_tracefilename.c_str(),"w");
+                }
+            }
+        }
+    }
+
+    if (trace_file!=NULL) {
+        char line[24];
+        char *dis = &ldissbl(addr)[1];
+        dis = stpcpy(line, dis);
+        while (dis<&line[22]) {
+            *dis++=' ';
+        }
+        *dis = '\0';
+
+        fprintf(trace_file, "0x%04x: %s ; ", addr, line);
+        // Write vars
+        if (regs) {
+            int hooked = external_rom_read_hooked(addr);
+            int rom = get_enable_external_rom();
+            if (hooked>=0)
+                rom = 2;
+            fprintf(trace_file, "[%d,%d,%d,%d] AF: %04x BC: %04x DE: %04x HL: %04x SP: %04x IX: %04X IY: %04x\n",
+                    rom,
+                    hook_external_rom_active,
+                    main_external_rom_active,
+                    InterfaceZ::get()->getRam(),
+                    regs->x.af,
+                    regs->x.bc,
+                    regs->x.de,
+                    regs->x.hl,
+                    vars->SP,
+                    ix->IX,
+                    iy->IY);
+        }
     }
 }
 
-void log_init(const char *filename)
+int InterfaceZ::external_rom_read_hooked(USHORT addr)
 {
-    vcdfile = fopen(filename,"w");
-    if (vcdfile!=NULL) {
-        fprintf(vcdfile,
-                "$date\n"
-                "Tue Dec  4 19:27:08 2020\n"
-                "$end\n"
-                "$version\n"
-                "GHDL v0\n"
-                "$end\n"
-                "$timescale\n"
-                "28.571429 ns\n"
-                "$end\n"
-                "$var wire 1 a AUDIO $end\n"
-                "$enddefinitions $end\n"
-               );
+    for (int i=0;i<MAX_ROM_HOOKS;i++) {
+        if (!(rom_hooks[i].flags & ROM_HOOK_FLAG_ACTIVE))
+            continue;
+
+        if ( (rom_hooks[i].flags &ROM_HOOK_FLAG_ROM_MASK)  != ROM_HOOK_FLAG_ROM(m_spectrumrom)) {
+            continue;
+        }
+
+        if ( (rom_hooks[i].flags & ROM_HOOK_FLAG_RANGED) == ROM_HOOK_FLAG_RANGED )
+        {
+            // Ranged hook. Always enable at start of instruction
+            if (hookAddressMatches(addr, rom_hooks[i]) ) {
+                return external_rom_read(addr);
+            }
+        }
     }
+    return -1;
 }
 
 
+void InterfaceZ::addTraceAddressMatch(uint16_t address)
+{
+    interfacez_debug("Add trace start address %04x", address);
+    m_traceaddress.push_back(address);
+}

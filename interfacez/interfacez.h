@@ -10,6 +10,7 @@
 #include "expansion/expansion.h"
 #include <stdexcept>
 #include "Tape.h"
+#include <QMutex>
 
 #include "Client.h"
 #include "SocketClient.h"
@@ -20,7 +21,13 @@ class QPushButton;
 
 void interfacez_debug(const char *fmt, ...);
 
-#define MAX_ROM_HOOKS 4
+#define MAX_ROM_HOOKS 8
+#define ROM_HOOK_FLAG_ACTIVE (1<<7)
+#define ROM_HOOK_FLAG_SETRESET (1<<6)
+#define ROM_HOOK_FLAG_PREPOST (1<<5)
+#define ROM_HOOK_FLAG_RANGED  (1<<4)
+#define ROM_HOOK_FLAG_ROM(x)  ((x)<<0)
+#define ROM_HOOK_FLAG_ROM_MASK (0x1)
 
 /* FPGA commands */
 
@@ -36,10 +43,12 @@ void interfacez_debug(const char *fmt, ...);
 #define FPGA_CMD_WRITE_TAP_FIFO (0xE4)
 #define FPGA_CMD_WRITE_TAP_FIFO_CMD (0xE6)
 #define FPGA_CMD_GET_TAP_FIFO_USAGE (0xE5)
+#define FPGA_SPI_CMD_SET_ROMRAM (0xEB)
 #define FPGA_CMD_SET_FLAGS (0xEC)
 #define FPGA_CMD_SET_REGS32 (0xED)
 #define FPGA_CMD_GET_REGS32 (0xEE)
 #define FPGA_CMD_READ_CMDFIFO_DATA (0xFB)
+#define FPGA_CMD_WRITE_MISCCTRL (0xFC)
 #define FPGA_CMD_READID1 (0x9E)
 #define FPGA_CMD_READID2 (0x9F)
 #define FPGA_SPI_CMD_READ_CAP (0x62)
@@ -105,6 +114,8 @@ public:
     bool isHooked(USHORT address);
 
     void loadCustomROM(const char *file);
+    void enableTrace(const char *file, bool startimmediatly=false);
+    void addTraceAddressMatch(uint16_t address);
 
 
     //static void hdlc_writer(void *userdata, const uint8_t c);
@@ -118,7 +129,18 @@ public:
     void removeClient(Client *c);
     void addClient(Client *c);
 
-    public slots:
+
+    uint8_t getRam() const {return m_ram;}
+
+    void insn_executed(unsigned short addr, unsigned long long ticks);
+
+    void insn_prefetch(unsigned short addr, unsigned long long clock,
+                       struct Z80vars *vars, union Z80Regs *regs,
+                       union Z80IX *ix, union Z80IY *iy);
+
+    int external_rom_read_hooked(USHORT address);
+
+public slots:
     void newConnection();
     //void onSDConnected();
     //void onSDDisconnected();
@@ -148,7 +170,8 @@ protected:
     void fpgaCommandWriteControl(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaCommandReadIntStatus(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaCommandWriteIntClear(const uint8_t *data, int datalen, uint8_t *txbuf);
-
+    void fpgaCommandSetRomRam(const uint8_t *data, int datalen, uint8_t *txbuf);
+    void fpgaCommandWriteMiscCtrl(const uint8_t *data, int datalen, uint8_t *txbuf);
     void cmdFifoWriteEvent();
     void captureRegsWritten();
     void simulateCapture();
@@ -203,15 +226,25 @@ signals:
     void tapDataReady();
 
 private:
+
     struct rom_hook {
         uint16_t base;
         uint8_t len;
         uint8_t flags;
     };
 
+    bool hookAddressMatches(USHORT address, const struct rom_hook &hook) {
+        if ((address>=hook.base) &&
+            (address<=hook.base + hook.len )) {
+            return true;
+        }
+        return false;
+    }
+
     struct rom_hook rom_hooks[MAX_ROM_HOOKS];
 
     uint8_t m_rom;
+    uint8_t m_spectrumrom;
     uint8_t m_ram;
     uint8_t m_intline;
     bool m_interruptenabled;
@@ -225,6 +258,7 @@ private:
     uint32_t extramptr;
 
     uint32_t regs[32];
+    uint8_t m_miscctrl;
 
     uint8_t m_sna[49179];
     unsigned m_sna_size;
@@ -238,6 +272,7 @@ private:
     QByteArray m_nmirom;
 
     QQueue<uint8_t> m_resourcefifo;
+    QMutex m_cmdfifomutex;
     QQueue<uint8_t> m_cmdfifo;
     QQueue<uint16_t> m_tapfifo;
 
@@ -251,6 +286,8 @@ private:
     QList<Client*> m_clients;
     uint16_t fpga_flags;
     QString m_debug;
+    std::vector<uint16_t> m_traceaddress;
+    std::string m_tracefilename;
 };
 
 #endif

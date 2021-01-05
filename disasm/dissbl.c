@@ -238,8 +238,7 @@ static int Init_labels()
      buffer[--str_len] = '\0';
 
      tmp = (int)strtol(buffer, NULL, 16);
-     printf("Label %d\n", tmp);
-     if (!(*(label_table + tmp) = malloc(str_len)-pos+1) ) {
+     if (!(*(label_table + tmp) = malloc(str_len-pos+1)) ) {
          fprintf(stderr,"Insuficient memory\n");
          return -1;
      }

@@ -22,7 +22,8 @@ HEADERS += QtSpecem.h \
            interfacez/Tape.h \
            interfacez/Client.h \
            interfacez/SocketClient.h \
-           interfacez/LinkClient.h 
+           interfacez/LinkClient.h \
+           interfacez/vcdlog.h 
 
 SOURCES += main.cpp \
            QtSpecem.cpp \
@@ -53,6 +54,7 @@ SOURCES += main.cpp \
            z80core/rotate.c \
            z80core/shutdown.c \
            z80core/stack.c \
+           disasm/dissbl.c \
            expansion/expansion.c \
            interfacez/interfacez.cpp \
            interfacez/hdlc_decoder.c \ 
@@ -60,6 +62,7 @@ SOURCES += main.cpp \
            interfacez/Tape.cpp \
            interfacez/Client.cpp \
            interfacez/SocketClient.cpp \
-           interfacez/LinkClient.cpp
+           interfacez/LinkClient.cpp \
+           interfacez/vcdlog.c 
 
 RESOURCES += QtSpecem.qrc
