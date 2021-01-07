@@ -98,6 +98,18 @@ void SocketClient::gpioEvent(uint8_t v)
     hdlc_encoder__end(&m_hdlc_encoder);
 }
 
+void SocketClient::connectUSB(const char *id)
+{
+    uint8_t len = strlen(id);
+    hdlc_encoder__begin(&m_hdlc_encoder);
+
+    uint8_t cmd[2]= { 0x03, len };
+    hdlc_encoder__write(&m_hdlc_encoder, &cmd, sizeof(cmd));
+    hdlc_encoder__write(&m_hdlc_encoder, id, len);
+    hdlc_encoder__end(&m_hdlc_encoder);
+
+};
+
 void SocketClient::sendGPIOupdate(uint64_t v)
 {
     interfacez_debug("Sending update GPIO");

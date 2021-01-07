@@ -139,6 +139,7 @@ public:
                        union Z80IX *ix, union Z80IY *iy);
 
     int external_rom_read_hooked(USHORT address);
+    void sendConnectUSB(const char *id);
 
 public slots:
     void newConnection();

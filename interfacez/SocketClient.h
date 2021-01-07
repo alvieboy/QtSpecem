@@ -17,7 +17,7 @@ struct SocketClient: public Client
 
     virtual void gpioEvent(uint8_t) override;
     virtual void sendGPIOupdate(uint64_t) override;
-
+    virtual void connectUSB(const char *id) override;
     static void hdlcDataReady(void *user, const uint8_t *data, unsigned len);
     void handleHDLC(const uint8_t *data, unsigned len);
 

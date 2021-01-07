@@ -7,5 +7,6 @@ struct LinkClient: public Client
     virtual void gpioEvent(uint8_t) override = 0;
     virtual void sendGPIOupdate(uint64_t) override = 0;
     virtual QString getError() override = 0;
+    virtual void connectUSB(const char *id) = 0;
     virtual void close() override = 0;
 };

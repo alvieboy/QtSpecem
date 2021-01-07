@@ -1103,7 +1103,13 @@ void InterfaceZ::sendGPIOupdate()
     for (auto c: m_clients) {
         c->sendGPIOupdate(m_gpiostate);
     }
+}
 
+void InterfaceZ::sendConnectUSB(const char *id)
+{
+    for (auto c: m_clients) {
+        c->connectUSB(id);
+    }
 }
 
 
