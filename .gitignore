@@ -6,3 +6,5 @@ Makefile
 .qmake.stash
 QtSpecem.app
 *~
+libQtSpecem.so
+libQtSpecem.so.1*
