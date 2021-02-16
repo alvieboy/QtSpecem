@@ -1333,7 +1333,7 @@ void InterfaceZ::insn_executed(unsigned short addr, unsigned long long ticks)
             }
 #endif
         } else {
-            if ((rom_hooks[i].flags & (ROM_HOOK_FLAG_PREPOST))==0) {
+            if ((rom_hooks[i].flags & (ROM_HOOK_FLAG_POST))==ROM_HOOK_FLAG_POST) {
                 // Post-match hook.
                 if (hookAddressMatches( addr, rom_hooks[i] )) {
                     int enable = 0;
@@ -1374,8 +1374,8 @@ void InterfaceZ::insn_prefetch(unsigned short addr, unsigned long long clock,
 #endif
 
         } else {
-            if ((rom_hooks[i].flags & (ROM_HOOK_FLAG_PREPOST))==ROM_HOOK_FLAG_PREPOST) {
-                // Post-match hook.
+            if ((rom_hooks[i].flags & (ROM_HOOK_FLAG_POST))==0) {
+                // Pre-match hook.
                 if (hookAddressMatches( addr, rom_hooks[i] )) {
                     int enable = 0;
                     if (rom_hooks[i].flags & ROM_HOOK_FLAG_SETRESET) {
@@ -1388,10 +1388,10 @@ void InterfaceZ::insn_prefetch(unsigned short addr, unsigned long long clock,
         }
     }
 
-
     if (trace_file==NULL) {
         if (m_traceaddress.size()) {
             for (auto i: m_traceaddress) {
+                //interfacez_debug("I %04x %04x", i, addr);
                 if (i==addr) {
                     interfacez_debug("Starting trace on '%s', address trigger %04x",
                                      m_tracefilename.c_str(), addr);

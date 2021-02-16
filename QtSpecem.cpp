@@ -202,7 +202,13 @@ int lParam;
 bool KeyCapturer::keyPressEvent(QKeyEvent *event)
 {
     bool handled = true;
-    switch (event->key() )
+    qDebug()<<"Key press event"<<event;
+    quint32 key;
+    //quint32 key = event->nativeVirtualKey();
+    //if (!key)
+        key = event->key();
+
+    switch (key)
     {
     case Qt::Key_1:      keybd_buff[3] |= ~0xFE; break;
     case Qt::Key_2:      keybd_buff[3] |= ~0xFD; break;
@@ -273,10 +279,24 @@ bool KeyCapturer::keyPressEvent(QKeyEvent *event)
     break;
 
     /* kempston joystick */
-    case Qt::Key_Left:  joystick |= 2; break;
-    case Qt::Key_Right: joystick |= 1; break;
-    case Qt::Key_Up:    joystick |= 8; break;
-    case Qt::Key_Down:  joystick |= 4; break;
+    case Qt::Key_Left:
+        keybd_buff[3] |= ~0xEF; // 5
+        keybd_buff[0] |= ~0xFE; /* CAPS SHIFT */
+        break;
+    case Qt::Key_Down:
+        keybd_buff[4] |= ~0xEF; // 6
+        keybd_buff[0] |= ~0xFE; /* CAPS SHIFT */
+        break;
+    case Qt::Key_Up:
+        keybd_buff[4] |= ~0xF7; // 7
+        keybd_buff[0] |= ~0xFE; /* CAPS SHIFT */
+        break;
+    case Qt::Key_Right:
+        keybd_buff[4] |= ~0xFB; // 8
+        keybd_buff[0] |= ~0xFE; /* CAPS SHIFT */
+        break;
+
+
     case Qt::Key_Alt: joystick |= 16; break;
     /* Sinclair joystick */
     //case VK_NUMPAD5:
@@ -305,8 +325,13 @@ bool KeyCapturer::keyPressEvent(QKeyEvent *event)
 bool KeyCapturer::keyReleaseEvent(QKeyEvent *event)
 {
     bool handled = true;
+    quint32 key;
 
-    switch (event->key() )
+    //quint32 key = event->nativeVirtualKey();
+    //if (!key)
+        key = event->key();
+
+    switch (key)
     {
     case Qt::Key_1: keybd_buff[3] &= 0xFE; break;
     case Qt::Key_2: keybd_buff[3] &= 0xFD; break;
@@ -374,11 +399,23 @@ bool KeyCapturer::keyReleaseEvent(QKeyEvent *event)
     keybd_buff[4] &= 0xFE;
     break;
 
-    /* kempston joystick */
-    case Qt::Key_Left:  joystick &= ~2; break;
-    case Qt::Key_Right: joystick &= ~1; break;
-    case Qt::Key_Up:    joystick &= ~8; break;
-    case Qt::Key_Down:  joystick &= ~4; break;
+    case Qt::Key_Left:
+        keybd_buff[3] &= 0xEF; // 5
+        keybd_buff[0] &= 0xFE; /* CAPS SHIFT */
+        break;
+    case Qt::Key_Down:
+        keybd_buff[4] &= 0xEF; // 6
+        keybd_buff[0] &= 0xFE; /* CAPS SHIFT */
+        break;
+    case Qt::Key_Up:
+        keybd_buff[4] &= 0xF7; // 7
+        keybd_buff[0] &= 0xFE; /* CAPS SHIFT */
+        break;
+    case Qt::Key_Right:
+        keybd_buff[4] &= 0xFB; // 8
+        keybd_buff[0] &= 0xFE; /* CAPS SHIFT */
+        break;
+
     case Qt::Key_Alt:   joystick &= ~16; break;
 
     /* Sinclair joystick */

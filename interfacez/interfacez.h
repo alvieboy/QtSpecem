@@ -24,7 +24,7 @@ void interfacez_debug(const char *fmt, ...);
 #define MAX_ROM_HOOKS 8
 #define ROM_HOOK_FLAG_ACTIVE (1<<7)
 #define ROM_HOOK_FLAG_SETRESET (1<<6)
-#define ROM_HOOK_FLAG_PREPOST (1<<5)
+#define ROM_HOOK_FLAG_POST (1<<5)
 #define ROM_HOOK_FLAG_RANGED  (1<<4)
 #define ROM_HOOK_FLAG_ROM(x)  ((x)<<0)
 #define ROM_HOOK_FLAG_ROM_MASK (0x1)
