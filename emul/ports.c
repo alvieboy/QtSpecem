@@ -51,7 +51,7 @@ void writeport(USHORT port, UCHAR value)
         border_updated(borderColor, get_clock_ticks());
 
         out_ula = value;
-
+        writeport_ula(value);
         /*        if (out_ula & 0x10)
          out_ula |= 0x40;
          else

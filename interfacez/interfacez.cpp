@@ -191,6 +191,15 @@ extern "C" {
         running = 1;
     }
 
+    static uint8_t prev_ula = 0;
+    void writeport_ula(UCHAR value)
+    {
+        if ((value ^ prev_ula) & (1<<4))  {
+            InterfaceZ::get()->micToggle();
+        }
+        prev_ula = value;
+    }
+
     extern void toggle_audio();
 
     extern UCHAR external_rom_read(USHORT address)
@@ -315,8 +324,23 @@ int InterfaceZ::init()
     m_ram = 0;
     m_gpiostate = 0xFFFFFFFFFFFFFFFF;
     m_miscctrl = 0;
+    m_micidle = 0;
 
+    m_micidletimer.setSingleShot(false);
+    m_micidletimer.start(500);
     return r;
+}
+
+
+void InterfaceZ::micIdleTimerExpired()
+{
+    if (m_micidle!=255)
+        m_micidle++;
+}
+
+void InterfaceZ::micToggle()
+{
+    m_micidle=0;
 }
 
 void InterfaceZ::enableTrace(const char *file, bool startimmediately)
@@ -668,6 +692,9 @@ void InterfaceZ::transceive(Client *c, const uint8_t *data, uint8_t *txbuf, unsi
             break;
         case FPGA_CMD_WRITE_MISCCTRL:
             fpgaCommandWriteMiscCtrl(data, datalen, txbuf);
+            break;
+        case FPGA_CMD_READ_MIC_IDLE:
+            fpgaCommandReadMicIdle(data, datalen, txbuf);
             break;
         default:
             fprintf(stderr,"Unknown SPI command 0x%02x\n", cmd);
@@ -1240,6 +1267,11 @@ void InterfaceZ::fpgaCommandReadIntStatus(const uint8_t *data, int datalen, uint
 {
     interfacez_debug("Reading int status 0x%0x\n", m_intline);
     txbuf[1] = m_intline;
+}
+
+void InterfaceZ::fpgaCommandReadMicIdle(const uint8_t *data, int datalen, uint8_t *txbuf)
+{
+    txbuf[1] = m_micidle;
 }
 
 void InterfaceZ::fpgaCommandWriteIntClear(const uint8_t *data, int datalen, uint8_t *txbuf)

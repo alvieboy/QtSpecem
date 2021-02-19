@@ -15,6 +15,10 @@ struct ioexpand {
 struct ioexpand expanders[MAX_EXPANDERS];
 static unsigned num_expanders = 0;
 
+void __attribute__((weak)) writeport_ula(UCHAR value)
+{
+}
+
 int readport_expansion(USHORT port, UCHAR *value)
 {
     unsigned i;

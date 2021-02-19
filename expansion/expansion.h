@@ -15,6 +15,7 @@ int register_expansion_port(USHORT port, USHORT mask,
 
 int readport_expansion(USHORT port, UCHAR *value);
 int writeport_expansion(USHORT port, UCHAR value);
+void writeport_ula(UCHAR value);
 
 void set_enable_external_rom(int enabled);
 int  get_enable_external_rom(void);

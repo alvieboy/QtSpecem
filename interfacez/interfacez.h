@@ -49,6 +49,7 @@ void interfacez_debug(const char *fmt, ...);
 #define FPGA_CMD_GET_REGS32 (0xEE)
 #define FPGA_CMD_READ_CMDFIFO_DATA (0xFB)
 #define FPGA_CMD_WRITE_MISCCTRL (0xFC)
+#define FPGA_CMD_READ_MIC_IDLE (0xFD)
 #define FPGA_CMD_READID1 (0x9E)
 #define FPGA_CMD_READID2 (0x9F)
 #define FPGA_SPI_CMD_READ_CAP (0x62)
@@ -140,6 +141,7 @@ public:
 
     int external_rom_read_hooked(USHORT address);
     void sendConnectUSB(const char *id);
+    void micToggle();
 
 public slots:
     void newConnection();
@@ -151,6 +153,7 @@ public slots:
     void linkGPIO(QPushButton *button, uint32_t gpionum);
     void raiseInterrupt(uint8_t index);
     void lowerInterrupt(uint8_t index);
+    void micIdleTimerExpired();
 
 protected:
     void fpgaCommandReadID(const uint8_t *data, int datalen, uint8_t *txbuf);
@@ -173,6 +176,7 @@ protected:
     void fpgaCommandWriteIntClear(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaCommandSetRomRam(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaCommandWriteMiscCtrl(const uint8_t *data, int datalen, uint8_t *txbuf);
+    void fpgaCommandReadMicIdle(const uint8_t *data, int datalen, uint8_t *txbuf);
     void cmdFifoWriteEvent();
     void captureRegsWritten();
     void simulateCapture();
@@ -248,6 +252,7 @@ private:
     uint8_t m_spectrumrom;
     uint8_t m_ram;
     uint8_t m_intline;
+    uint8_t m_micidle;
     bool m_interruptenabled;
     uint64_t m_gpiostate;
     TapePlayer m_player;
@@ -287,6 +292,7 @@ private:
     QList<Client*> m_clients;
     uint16_t fpga_flags;
     QString m_debug;
+    QTimer m_micidletimer;
     std::vector<uint16_t> m_traceaddress;
     std::string m_tracefilename;
 };
