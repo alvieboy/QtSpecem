@@ -265,6 +265,7 @@ private:
 
     uint32_t regs[32];
     uint8_t m_miscctrl;
+    uint8_t m_scratch0;
 
     uint8_t m_sna[49179];
     unsigned m_sna_size;

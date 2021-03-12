@@ -25,6 +25,7 @@
 #define FPGA_PORT_RAM_DATA (0x63)
 #define FPGA_PORT_NMIREASON (0x6F)
 #define FPGA_PORT_MEMSEL  (0x6B)
+#define FPGA_PORT_DEBUG (0x7F)
 
 
 /* Trigger flags */
@@ -121,6 +122,7 @@ extern "C" {
     static volatile int nmi_pending = 0;
     static volatile int running = 0;
     static volatile int forceromonret = 0;
+    static volatile int romcs_active_on_nmi = 0;
     static volatile int divmmc_compat = 1;
     //static volatile const uint8_t *nmi_rom = NULL;
     void save_sna(const char * file_name);
@@ -136,7 +138,7 @@ extern "C" {
     {
         if (nmi_pending) {
             nmi_pending=0;
-            //open_sna("input.sna");
+            romcs_active_on_nmi = get_main_external_rom_active();
             do_nmi_int();
             if (1) {
                 // test
@@ -154,8 +156,8 @@ extern "C" {
     void retn_called_hook()
     {
         // Upon retn, restore ROM.
-        interfacez_debug("RETN called, restoring stock ROM");
-        set_main_external_rom_active(0);
+        interfacez_debug("RETN called, %srestoring stock ROM", romcs_active_on_nmi?"CS was active upon entry, NOT ": "");
+        set_main_external_rom_active(romcs_active_on_nmi);
         //save_sna("snadump.sna");
     }
 
@@ -402,9 +404,15 @@ UCHAR InterfaceZ::ioread(USHORT address)
     //}
     //interfacez_debug("IO read %04x\n", address);
     switch (address & 0xFF) {
-    case 0x05:
+    /*case 0x05:
         val = 0x39; //Bg
         break;
+      */
+    case FPGA_PORT_SCRATCH0:
+        interfacez_debug("IO Read scratch: %02x\n", m_scratch0);
+        val = m_scratch0;
+        break;
+
     case FPGA_PORT_MISCCTRL:
         val = m_miscctrl;
         break;
@@ -476,7 +484,12 @@ void InterfaceZ::iowrite(USHORT address, UCHAR value)
    
 
     switch (address & 0xFF) {
+
     case FPGA_PORT_SCRATCH0:
+        interfacez_debug("IOWRITE scratch %02x", value);
+        m_scratch0 = value;
+        break;
+    case FPGA_PORT_DEBUG:
         if (value=='\n') {
             interfacez_debug("DEBUG: %s", m_debug.toLatin1().constData());
             m_debug.clear();
