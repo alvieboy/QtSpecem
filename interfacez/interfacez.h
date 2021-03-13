@@ -45,8 +45,8 @@ void interfacez_debug(const char *fmt, ...);
 #define FPGA_CMD_GET_TAP_FIFO_USAGE (0xE5)
 #define FPGA_SPI_CMD_SET_ROMRAM (0xEB)
 #define FPGA_CMD_SET_FLAGS (0xEC)
-#define FPGA_CMD_SET_REGS32 (0xED)
-#define FPGA_CMD_GET_REGS32 (0xEE)
+#define FPGA_CMD_GET_REGS32 (0xED)
+#define FPGA_CMD_SET_REGS32 (0xEE)
 #define FPGA_CMD_READ_CMDFIFO_DATA (0xFB)
 #define FPGA_CMD_WRITE_MISCCTRL (0xFC)
 #define FPGA_CMD_READ_MIC_IDLE (0xFD)
@@ -296,6 +296,7 @@ private:
     QTimer m_micidletimer;
     std::vector<uint16_t> m_traceaddress;
     std::string m_tracefilename;
+    uint8_t m_kempston;
 };
 
 #endif

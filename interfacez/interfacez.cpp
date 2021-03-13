@@ -297,6 +297,7 @@ InterfaceZ::InterfaceZ()
     m_intline = 0;
     m_interruptenabled = true;
     fpga_flags = 0;
+    m_kempston = 0x1F;
 }
 
 int InterfaceZ::init()
@@ -461,7 +462,7 @@ UCHAR InterfaceZ::ioread(USHORT address)
         val = (extramptr>>16) & 0xFF;
         break;
     case 0x1F: // Joy port
-        val = 0x00;
+        val = m_kempston;
         break;
     }
 
@@ -942,7 +943,6 @@ void InterfaceZ::fpgaSetRegs32(const uint8_t *data, int datalen, uint8_t *txbuf)
     data = extractu8(data, datalen, regnum);
     data = extractbe32(data, datalen, regdata);
     uint32_t olddata = regs[regnum];
-
     if (regnum<32) {
         regs[regnum] = regdata;
     }
@@ -983,6 +983,11 @@ void InterfaceZ::fpgaSetRegs32(const uint8_t *data, int datalen, uint8_t *txbuf)
         }
 
         divmmc_compat = (regs[2]>>5) & 1;
+    }
+    if (regnum==5) {
+        interfacez_debug("Joystick update: %08x", regdata);
+        m_kempston = (regdata>>18) & 0x1F;
+
     }
 }
 
