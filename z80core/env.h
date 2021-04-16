@@ -92,6 +92,7 @@ void writeRAM(USHORT addr, UCHAR value);
 
 unsigned long long get_clock_ticks_since_startup();
 unsigned long get_clock_ticks();
+void z80_interrupt_callback(void);
 //#define readbyte(adress) (*(mem+(USHORT)(adress)))
 
 /* read word pointed to PC and sum 2 to PC

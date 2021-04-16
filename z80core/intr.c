@@ -20,7 +20,8 @@ void do_interrupt()
 
    /* Do interrupt acord to _IM
 	 _IM can be 0, 1 or 2
-   */
+         */
+   z80_interrupt_callback();
    switch(_IM)
    {
       case (UCHAR)1: /* IM 1 */
