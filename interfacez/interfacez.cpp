@@ -118,7 +118,7 @@ extern "C" {
 #if QT_VERSION >= QT_VERSION_CHECK(5,11,0)
             if (!qf.open(QIODevice::WriteOnly|QIODevice::NewOnly)) {
 #else
-            if (qf.exists()) {
+            if (!qf.exists()) {
                 qf.open(QIODevice::WriteOnly);
             } else {
 #endif
