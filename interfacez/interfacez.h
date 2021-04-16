@@ -21,7 +21,7 @@ class QPushButton;
 
 void interfacez_debug(const char *fmt, ...);
 
-#define MAX_ROM_HOOKS 8
+#define MAX_ROM_HOOKS 16
 #define ROM_HOOK_FLAG_ACTIVE (1<<7)
 #define ROM_HOOK_FLAG_SETRESET (1<<6)
 #define ROM_HOOK_FLAG_POST (1<<5)
@@ -154,6 +154,7 @@ public slots:
     void raiseInterrupt(uint8_t index);
     void lowerInterrupt(uint8_t index);
     void micIdleTimerExpired();
+    void screenshot(QImage&);
 
 protected:
     void fpgaCommandReadID(const uint8_t *data, int datalen, uint8_t *txbuf);

@@ -84,9 +84,15 @@ extern "C" {
 #undef IX
 #undef IY
 #undef SP
+#undef IFF1
+#undef IFF2
+
+    int scr_save(FILE * fp);
+    int next_save_sequence = 0;
 
     static int hook_external_rom_active = 0;
     static int main_external_rom_active = 0;
+    static volatile int pending_screenshot = 0;
 
     static void update_rom_active() {
         int prev = get_enable_external_rom();
@@ -95,6 +101,38 @@ extern "C" {
         if (prev!=newa) {
             set_enable_external_rom(newa);
         }
+    }
+
+    void request_screenshot()
+    {
+        pending_screenshot = 1;
+    }
+
+    void do_screenshot(QImage &i)
+    {
+        char filename[128];
+        do {
+            sprintf(filename,"screenshot-%04d.png", next_save_sequence);
+            QFile qf(filename);
+            if (!qf.open(QIODevice::WriteOnly|QIODevice::NewOnly)) {
+                next_save_sequence++;
+                continue;
+            }
+            //if (qf.valid()) {
+                i.save(&qf, "PNG"); // writes image into ba in PNG format
+                qf.close();
+                //scr_save(f);
+                next_save_sequence++;
+                interfacez_debug("Saved screenshot %s",filename);
+           // } else {
+                //interfacez_debug("Cannot save screenshot %s",filename);
+           // }
+            break;
+        } while (1);
+    }
+
+    void z80_interrupt_callback()
+    {
     }
 
     int external_rom_read_hooked(USHORT address)
@@ -1240,9 +1278,9 @@ void InterfaceZ::fpgaCommandWriteControl(const uint8_t *data, int datalen, uint8
     interfacez_debug("CONTROL write");
     while (datalen--) {
         //when "1000000" | "1000100" | "1001000" | "1001100" => -- Hook low
-        if ((address & 0x60) == 0x40) {
+        if ((address & 0x40) == 0x40) {
             // ROM Hook control
-            unsigned hookno = (address >> 2) & 0x7;
+            unsigned hookno = (address >> 2) & (MAX_ROM_HOOKS-1);
             if (hookno>MAX_ROM_HOOKS) {
                 interfacez_debug("MAX hooks exceeded");
             }
@@ -1467,7 +1505,7 @@ void InterfaceZ::insn_prefetch(unsigned short addr, unsigned long long clock,
             int rom = get_enable_external_rom();
             if (hooked>=0)
                 rom = 2;
-            fprintf(trace_file, "[%d,%d,%d,%d] AF: %04x BC: %04x DE: %04x HL: %04x SP: %04x IX: %04X IY: %04x\n",
+            fprintf(trace_file, "[%d,%d,%d,%d] AF: %04x BC: %04x DE: %04x HL: %04x SP: %04x IX: %04X IY: %04x IFF1=%d IFF2=%d\n",
                     rom,
                     hook_external_rom_active,
                     main_external_rom_active,
@@ -1478,7 +1516,9 @@ void InterfaceZ::insn_prefetch(unsigned short addr, unsigned long long clock,
                     regs->x.hl,
                     vars->SP,
                     ix->IX,
-                    iy->IY);
+                    iy->IY,
+                    vars->IFF1,
+                    vars->IFF2);
         }
     }
 }
@@ -1509,4 +1549,9 @@ void InterfaceZ::addTraceAddressMatch(uint16_t address)
 {
     interfacez_debug("Add trace start address %04x", address);
     m_traceaddress.push_back(address);
+}
+
+void InterfaceZ::screenshot(QImage &i)
+{
+    do_screenshot(i);
 }

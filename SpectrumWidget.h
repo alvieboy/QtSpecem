@@ -21,6 +21,9 @@ public:
     void stopEmul();
     void resumeEmul();
     void loadSNA(const char *filename);
+
+    QImage getImage() const;
+
 protected:
     void drawBorder();
     void dragEnterEvent(QDragEnterEvent *event) override;

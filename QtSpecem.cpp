@@ -197,6 +197,12 @@ void SpectrumWidget::paintEvent(QPaintEvent *) {
     border_ptr = 0;
 }
 
+QImage SpectrumWidget::getImage() const
+{
+    return background;
+}
+
+
 int lParam;
 
 bool KeyCapturer::keyPressEvent(QKeyEvent *event)
