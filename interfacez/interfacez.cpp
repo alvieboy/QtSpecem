@@ -10,6 +10,7 @@
 #include <QPushButton>
 #include <unistd.h>
 #include "vcdlog.h"
+#include <QtGlobal>
 
 /* FPGA IO ports */
 
@@ -114,19 +115,25 @@ extern "C" {
         do {
             sprintf(filename,"screenshot-%04d.png", next_save_sequence);
             QFile qf(filename);
+#if QT_VERSION >= QT_VERSION_CHECK(5,11,0)
             if (!qf.open(QIODevice::WriteOnly|QIODevice::NewOnly)) {
+#else
+            if (qf.exists()) {
+                qf.open(QIODevice::WriteOnly);
+            } else {
+#endif
                 next_save_sequence++;
                 continue;
             }
-            //if (qf.valid()) {
+            if (qf.isOpen()) {
                 i.save(&qf, "PNG"); // writes image into ba in PNG format
                 qf.close();
                 //scr_save(f);
                 next_save_sequence++;
                 interfacez_debug("Saved screenshot %s",filename);
-           // } else {
-                //interfacez_debug("Cannot save screenshot %s",filename);
-           // }
+            } else {
+                interfacez_debug("Cannot save screenshot %s",filename);
+            }
             break;
         } while (1);
     }
