@@ -234,6 +234,7 @@ extern "C" {
 
     void reset_spectrum() {
         //set_enable_external_rom(0);
+        interfacez_debug("Hard resetting spectrum");
         do_reset();
         running = 1;
     }

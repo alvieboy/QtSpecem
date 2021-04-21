@@ -8,6 +8,7 @@
 #include<QImage>
 #include<QTimer>
 #include <QtGui>
+#include <QColor>
 
 class Q_DECL_EXPORT SpectrumWidget: public QWidget {
 Q_OBJECT
@@ -22,8 +23,11 @@ public:
     void resumeEmul();
     void loadSNA(const char *filename);
 
-    QImage getImage() const;
+    QRgb getColorPallete(int index);
 
+    QImage getImage() const;
+signals:
+    void paintCompleted(QImage&);
 protected:
     void drawBorder();
     void dragEnterEvent(QDragEnterEvent *event) override;

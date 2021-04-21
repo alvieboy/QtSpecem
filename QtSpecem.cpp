@@ -144,6 +144,12 @@ void SpectrumWidget::resumeEmul()
     timer->start(20); //
 }
 
+
+QRgb SpectrumWidget::getColorPallete(int index)
+{
+    return  qRgb(rgbvals[index][0], rgbvals[index][1], rgbvals[index][2]);
+}
+
 void SpectrumWidget::loadSNA(const char *file)
 {
     open_sna(file);
@@ -195,6 +201,7 @@ void SpectrumWidget::paintEvent(QPaintEvent *) {
 
     // Reset border ptr
     border_ptr = 0;
+    emit paintCompleted(background);
 }
 
 QImage SpectrumWidget::getImage() const
