@@ -235,13 +235,35 @@ private:
 
     struct rom_hook {
         uint16_t base;
-        uint8_t len;
+        uint8_t masklen;
         uint8_t flags;
     };
 
+    uint16_t mask_from_masklen(uint8_t masklen)
+    {
+        uint16_t mask = 0x3FFF;
+        switch (masklen) {
+        case 0:
+            break;
+        case 1:
+            mask = 0x3FFE; // 2 bytes
+            break;
+        case 2:
+            mask = 0x3FF7; // 8 bytes
+            break;
+        case 3:
+            mask = 0x3FF0; // 256 bytes
+            break;
+        default:
+            break;
+        }
+        return mask;
+    }
+
     bool hookAddressMatches(USHORT address, const struct rom_hook &hook) {
-        if ((address>=hook.base) &&
-            (address<=hook.base + hook.len )) {
+        uint16_t mask = mask_from_masklen(hook.masklen);
+
+        if ((address & mask) == (hook.base &mask)) {
             return true;
         }
         return false;

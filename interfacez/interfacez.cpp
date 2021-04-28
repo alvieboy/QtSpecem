@@ -1309,15 +1309,15 @@ void InterfaceZ::fpgaCommandWriteControl(const uint8_t *data, int datalen, uint8
                 break;
             case 0x02:
                 // Len
-                rom_hooks[hookno].len = *data;
+                rom_hooks[hookno].masklen = (*data) & 0x03;
                 break;
             case 0x03:
                 // flags
                 rom_hooks[hookno].flags = *data;
                 if (rom_hooks[hookno].flags) {
-                    interfacez_debug("HOOK %d activated, address %04x len %d", hookno,
+                    interfacez_debug("HOOK %d activated, address %04x masklen %d", hookno,
                                      rom_hooks[hookno].base,
-                                     rom_hooks[hookno].len+1);
+                                     rom_hooks[hookno].masklen);
                 }
                 break;
             }
