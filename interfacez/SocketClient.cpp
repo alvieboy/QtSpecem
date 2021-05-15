@@ -33,7 +33,10 @@ void SocketClient::hdlc_flusher(void *userdata)
 {
     SocketClient *c = static_cast<SocketClient*>(userdata);
 
-    c->m_sock->write(c->m_txarray);
+    if (c->m_sock->write(c->m_txarray)<0)
+    {
+    }
+        //abort();
     c->m_txarray.clear();
 }
 

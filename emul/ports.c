@@ -106,6 +106,10 @@ void toggle_audio()
     audio_on = !audio_on;
     //printf("Audio %d\n", audio_on);
 }
+UCHAR get_audio()
+{
+    return audio_on;
+}
 
 #include <stdio.h>
 

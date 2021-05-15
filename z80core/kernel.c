@@ -79,6 +79,7 @@ void execute()
          USHORT insnpc = PC;
         if (!TraceOn)
         {
+            build_F();
 	   insn_prefetch(insnpc, clock_ticks_since_startup, Z80vars, Z80Regs, Z80IX, Z80IY);
 	   inc_R();
 	    /* Call funtion indexed by opcode */

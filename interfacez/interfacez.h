@@ -47,6 +47,7 @@ void interfacez_debug(const char *fmt, ...);
 #define FPGA_CMD_SET_FLAGS (0xEC)
 #define FPGA_CMD_GET_REGS32 (0xED)
 #define FPGA_CMD_SET_REGS32 (0xEE)
+#define FPGA_CMD_FRAME_SYNC (0xEF)
 #define FPGA_CMD_READ_CMDFIFO_DATA (0xFB)
 #define FPGA_CMD_WRITE_MISCCTRL (0xFC)
 #define FPGA_CMD_READ_MIC_IDLE (0xFD)
@@ -64,6 +65,10 @@ void interfacez_debug(const char *fmt, ...);
 #define PIN_NUM_CMD_INTERRUPT 27
 #define PIN_NUM_SPECT_INTERRUPT 26
 #define PIN_NUM_USB_INTERRUPT 22
+
+#define FPGA_INTERRUPT_CMD_OFFSET 0
+#define FPGA_INTERRUPT_USB_OFFSET 1
+#define FPGA_INTERRUPT_SPECT_OFFSET 2
 
 typedef union {
     struct {
@@ -160,6 +165,7 @@ protected:
     void fpgaCommandReadID(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaReadStatus(const uint8_t *data, int datalen, uint8_t *txbuf);
+    void fpgaReadVideoMem(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaReadExtRam(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaWriteExtRam(const uint8_t *data, int datalen, uint8_t *txbuf);
     void fpgaWriteResFifo(const uint8_t *data, int datalen, uint8_t *txbuf);
@@ -303,6 +309,7 @@ private:
 
     QQueue<uint8_t> m_resourcefifo;
     QMutex m_cmdfifomutex;
+    QMutex m_intmutex;
     QQueue<uint8_t> m_cmdfifo;
     QQueue<uint16_t> m_tapfifo;
 

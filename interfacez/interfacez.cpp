@@ -26,6 +26,7 @@
 #define FPGA_PORT_RAM_DATA (0x63)
 #define FPGA_PORT_NMIREASON (0x6F)
 #define FPGA_PORT_MEMSEL  (0x6B)
+#define FPGA_PORT_PSEUDOAUDIO (0x73)
 #define FPGA_PORT_DEBUG (0x7F)
 
 
@@ -87,6 +88,7 @@ extern "C" {
 #undef SP
 #undef IFF1
 #undef IFF2
+#undef clock_ticks
 
     int scr_save(FILE * fp);
     int next_save_sequence = 0;
@@ -193,6 +195,8 @@ extern "C" {
         }
         if (running) {
             execute();
+            // Trigger interrupt
+            InterfaceZ::get()->raiseInterrupt(FPGA_INTERRUPT_SPECT_OFFSET);
         } else {
             usleep(10000);
         }
@@ -229,6 +233,7 @@ extern "C" {
 
     void stop_spectrum()
     {
+        interfacez_debug("Stopping spectrum");
         running = 0;
     }
 
@@ -249,6 +254,7 @@ extern "C" {
     }
 
     extern void toggle_audio();
+    extern UCHAR get_audio();
 
     extern UCHAR external_rom_read(USHORT address)
     {
@@ -428,6 +434,7 @@ void InterfaceZ::setCommsSocket(int sock)
 {
     QAbstractSocket *s = new QAbstractSocket(QAbstractSocket::UnknownSocketType,this);
     s->setSocketDescriptor(sock);
+    s->open(QIODevice::ReadWrite);
     addConnection(s);
 }
 
@@ -509,6 +516,17 @@ UCHAR InterfaceZ::ioread(USHORT address)
         break;
     case 0x1F: // Joy port
         val = m_kempston;
+        break;
+    case FPGA_PORT_PSEUDOAUDIO:
+        if (fpga_flags & 1<<10) {
+            if (get_audio()) {
+                val = 0x0D;
+            } else {
+                val = 0x07;
+            }
+        } else {
+            val = 0;
+        }
         break;
     }
 
@@ -688,6 +706,7 @@ void InterfaceZ::transceive(Client *c, const uint8_t *data, uint8_t *txbuf, unsi
             fpgaReadStatus(data, datalen, txbuf);
             break;
         case FPGA_CMD_READ_VIDEO_MEM:
+            fpgaReadVideoMem(data, datalen, txbuf);
             break;
         case FPGA_CMD_READ_PC:
             break;
@@ -755,6 +774,8 @@ void InterfaceZ::transceive(Client *c, const uint8_t *data, uint8_t *txbuf, unsi
             break;
         case FPGA_CMD_READ_MIC_IDLE:
             fpgaCommandReadMicIdle(data, datalen, txbuf);
+            break;
+        case FPGA_CMD_FRAME_SYNC:
             break;
         default:
             fprintf(stderr,"Unknown SPI command 0x%02x\n", cmd);
@@ -835,6 +856,19 @@ void InterfaceZ::fpgaReadStatus(const uint8_t *data, int datalen, uint8_t *txbuf
     txbuf[1] = status;
 }
 
+extern UCHAR *mem;
+#define SPECTRUM_FRAME_SIZE (32*(192+24))
+
+void InterfaceZ::fpgaReadVideoMem(const uint8_t *data, int datalen, uint8_t *txbuf)
+{
+    Q_UNUSED(data);
+
+    if (datalen<SPECTRUM_FRAME_SIZE+1)
+        throw DataShortException();
+
+    memcpy(&txbuf[3], &mem[0x4000], SPECTRUM_FRAME_SIZE);
+}
+
 void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
     Q_UNUSED(txbuf);
@@ -844,7 +878,7 @@ void InterfaceZ::fpgaSetFlags(const uint8_t *data, int datalen, uint8_t *txbuf)
 
     uint16_t old_flags = fpga_flags;
 
-    //interfacez_debug("Set Flags %02x %02x %02x", data[0], data[1], data[2]);
+    interfacez_debug("Set Flags %02x %02x %02x", data[0], data[1], data[2]);
 
     fpga_flags = ((uint16_t)data[0]) | (data[2]<<8);
 
@@ -1102,19 +1136,25 @@ void InterfaceZ::cmdFifoWriteEvent()
 void InterfaceZ::raiseInterrupt(uint8_t index)
 {
     // Activate interrupt line
+    m_intmutex.lock();
+    bool wasenabled = m_interruptenabled;
     m_intline |= (1<<index);
+    m_interruptenabled = false;
+    m_intmutex.unlock();
 
-    if (m_interruptenabled) {
+
+    if (wasenabled) {
         for (auto c: m_clients) {
             c->gpioEvent(PIN_NUM_CMD_INTERRUPT);
         }
-        m_interruptenabled = false;
     }
 }
 
 void InterfaceZ::lowerInterrupt(uint8_t index)
 {
+    m_intmutex.lock();
     m_intline &= ~(1<<index);
+    m_intmutex.unlock();
 }
 
 #define MEMLAYOUT_ROM0_BASEADDRESS (0x000000)
@@ -1329,7 +1369,7 @@ void InterfaceZ::fpgaCommandWriteControl(const uint8_t *data, int datalen, uint8
 
 void InterfaceZ::fpgaCommandReadIntStatus(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
-    interfacez_debug("Reading int status 0x%0x\n", m_intline);
+  //  printf("Reading int status 0x%0x\n", m_intline);
     txbuf[1] = m_intline;
 }
 
@@ -1340,10 +1380,15 @@ void InterfaceZ::fpgaCommandReadMicIdle(const uint8_t *data, int datalen, uint8_
 
 void InterfaceZ::fpgaCommandWriteIntClear(const uint8_t *data, int datalen, uint8_t *txbuf)
 {
-    //m_intline &= ~data[0];
+    m_intmutex.lock();
+    m_intline &= ~data[0];
     m_interruptenabled = true;
+    bool propagate = m_intline !=0 ;
+    m_intmutex.unlock();
 
-    if (m_intline) {
+    // This cannot block or we can lock SPI for good.
+
+    if (propagate) {
         for (auto c: m_clients) {
             c->gpioEvent(PIN_NUM_CMD_INTERRUPT);
         }
@@ -1513,7 +1558,7 @@ void InterfaceZ::insn_prefetch(unsigned short addr, unsigned long long clock,
             int rom = get_enable_external_rom();
             if (hooked>=0)
                 rom = 2;
-            fprintf(trace_file, "[%d,%d,%d,%d] AF: %04x BC: %04x DE: %04x HL: %04x SP: %04x IX: %04X IY: %04x IFF1=%d IFF2=%d\n",
+            fprintf(trace_file, "[%d,%d,%d,%d] AF: %04x BC: %04x DE: %04x HL: %04x SP: %04x IX: %04X IY: %04x IFF1=%d IFF2=%d T=%ld\n",
                     rom,
                     hook_external_rom_active,
                     main_external_rom_active,
@@ -1526,7 +1571,8 @@ void InterfaceZ::insn_prefetch(unsigned short addr, unsigned long long clock,
                     ix->IX,
                     iy->IY,
                     vars->IFF1,
-                    vars->IFF2);
+                    vars->IFF2,
+                    vars->clock_ticks);
         }
     }
 }
