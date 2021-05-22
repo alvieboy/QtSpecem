@@ -111,6 +111,8 @@ UCHAR get_audio()
     return audio_on;
 }
 
+extern UCHAR readport_ula(USHORT address, UCHAR input);
+
 #include <stdio.h>
 
 extern void insn_executed(unsigned long long);
@@ -220,7 +222,7 @@ UCHAR readport(USHORT port)
 
             //f (!bModel3)
             //		value ^= BIT_5;
-
+            value = readport_ula(port, value);
         }
         else
         {

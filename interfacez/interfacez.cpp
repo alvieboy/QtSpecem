@@ -253,6 +253,11 @@ extern "C" {
         prev_ula = value;
     }
 
+    UCHAR readport_ula(USHORT address, UCHAR input)
+    {
+        InterfaceZ::get()->readula(address, input);
+    }
+
     extern void toggle_audio();
     extern UCHAR get_audio();
 
@@ -350,6 +355,9 @@ InterfaceZ::InterfaceZ()
     m_interruptenabled = true;
     fpga_flags = 0;
     m_kempston = 0x1F;
+    for (i=0;i<8;i++) {
+        m_keys[i] = 0xFF;
+    }
 }
 
 int InterfaceZ::init()
@@ -1067,8 +1075,18 @@ void InterfaceZ::fpgaSetRegs32(const uint8_t *data, int datalen, uint8_t *txbuf)
     if (regnum==5) {
         interfacez_debug("Joystick update: %08x", regdata);
         m_kempston = (regdata>>18) & 0x1F;
-
     }
+
+    // Keyboard injection
+    if (regnum==3 || regnum==4) {
+        // Unpack data.
+        uint64_t keydata = (uint64_t)regs[3] + (((uint64_t)regs[4])<<32);
+        for (int i=0;i<8;i++) {
+            m_keys[i] = keydata | 0xC0;
+            keydata>>=5;
+        }
+    }
+
 }
 
 void InterfaceZ::fpgaGetRegs32(const uint8_t *data, int datalen, uint8_t *txbuf)
@@ -1608,4 +1626,15 @@ void InterfaceZ::addTraceAddressMatch(uint16_t address)
 void InterfaceZ::screenshot(QImage &i)
 {
     do_screenshot(i);
+}
+
+uint8_t InterfaceZ::readula(uint16_t address, uint8_t val)
+{
+    int i;
+    for (i=0;i<8;i++) {
+        if ((address & (1<<(8+i)))==0) {
+            val &= m_keys[i];
+        }
+    }
+    return val;
 }

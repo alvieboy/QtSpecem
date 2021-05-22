@@ -147,7 +147,7 @@ public:
     int external_rom_read_hooked(USHORT address);
     void sendConnectUSB(const char *id);
     void micToggle();
-
+    uint8_t readula(uint16_t address, uint8_t data);
 public slots:
     void newConnection();
     //void onSDConnected();
@@ -327,6 +327,7 @@ private:
     std::vector<uint16_t> m_traceaddress;
     std::string m_tracefilename;
     uint8_t m_kempston;
+    uint8_t m_keys[8];
 };
 
 #endif
